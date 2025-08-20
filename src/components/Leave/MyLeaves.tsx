@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Filter, Search, Download, Eye, MoreHorizontal } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { leaveService } from '../../firebase/firestore';
-import { LeaveRequest } from '../../types';
+import { userService } from '../../firebase/firestore';
+import { LeaveRequest, User } from '../../types';
 import { saveAs } from 'file-saver';
 
 const YEARS = ['2nd', '3rd', '4th'];
@@ -31,14 +32,32 @@ const MyLeaves: React.FC = () => {
         if (user.role === 'teacher' || user.role === 'hod') {
           // Fetch all leave requests for teachers/HODs
           const allRequests = await leaveService.getAllLeaveRequests();
-          // Filter by year, sem, div (student info is on leave.userId, need to get user info)
-          // For performance, filter only those with matching year/sem/div
-          // If leave object has year/sem/div, filter directly; else, fetch user info (not ideal for large data)
-          // We'll assume leave object has year/sem/div (if not, you may need to join with userService)
-          const filtered = allRequests.filter(l =>
-            l.year === year && l.sem === sem && l.div === div
-          );
-          setLeaveRecords(filtered);
+          
+          // For teacher/HOD view, we need to filter by student's year/sem/div
+          // Since leave requests may not have year/sem/div, we need to get student data
+          const filteredRequests = [];
+          
+          for (const leaveRequest of allRequests) {
+            // Only include leaves from students in the same department
+            if (leaveRequest.department === user.department) {
+              try {
+                // Get student data to check year/sem/div
+                const studentData = await userService.getUser(leaveRequest.userId);
+                if (studentData && studentData.role === 'student') {
+                  // Check if student matches the selected year/sem/div
+                  if (studentData.year === year && studentData.sem === sem && studentData.div === div) {
+                    filteredRequests.push(leaveRequest);
+                  }
+                }
+              } catch (error) {
+                console.log(`Could not fetch student data for ${leaveRequest.userId}:`, error);
+                // If we can't get student data, skip this leave request
+                continue;
+              }
+            }
+          }
+          
+          setLeaveRecords(filteredRequests);
         } else {
           // Student: only their own leaves
           const requests = await leaveService.getLeaveRequestsByUser(user.id);
@@ -50,6 +69,7 @@ const MyLeaves: React.FC = () => {
         setLoading(false);
       }
     };
+    
     // Only reload for teachers/HODs when year/sem/div changes
     if (user?.role === 'teacher' || user?.role === 'hod') {
       loadLeaveRequests();
@@ -129,7 +149,7 @@ const MyLeaves: React.FC = () => {
     const rows = filteredLeaves.map((leave, idx) => {
       const fromDate = new Date(leave.fromDate).toLocaleDateString('en-GB');
       const toDate = new Date(leave.toDate).toLocaleDateString('en-GB');
-      const approvedDate = leave.approvedDate ? new Date(leave.approvedDate).toLocaleDateString('en-GB') : '';
+      const approvedDate = leave.approvedAt ? new Date(leave.approvedAt).toLocaleDateString('en-GB') : '';
       const approvalFlow = leave.approvalFlow ? leave.approvalFlow.join(' > ') : '';
       return [
         idx + 1,
@@ -141,7 +161,7 @@ const MyLeaves: React.FC = () => {
         leave.daysCount,
         leave.status,
         approvalFlow,
-        leave.approver || '',
+        leave.approvedBy || '',
         approvedDate,
         leave.remarks ? leave.remarks.replace(/\n|\r/g, ' ') : ''
       ];
@@ -285,8 +305,33 @@ const MyLeaves: React.FC = () => {
         </div>
       </div>
 
-      {/* Leave Records */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {filteredLeaves.map((leave) => (
+          <div key={leave.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-mobile" onClick={() => setSelectedLeave(leave)}>
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="font-semibold text-gray-900">{getLeaveTypeName(leave.leaveType)}</span>
+                  <span className="text-xs text-gray-500">{leave.id}</span>
+                </div>
+                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{leave.reason}</p>
+              </div>
+              <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(leave.status)}`}>
+                {getStatusIcon(leave.status)}
+                <span className="capitalize">{leave.status}</span>
+              </div>
+            </div>
+            <div className="mt-3 text-xs text-gray-600 flex items-center justify-between">
+              <span>{new Date(leave.fromDate).toLocaleDateString()} - {new Date(leave.toDate).toLocaleDateString()}</span>
+              <span>{leave.daysCount} day{leave.daysCount > 1 ? 's' : ''}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
@@ -380,8 +425,8 @@ const MyLeaves: React.FC = () => {
 
       {/* Leave Detail Modal */}
       {selectedLeave && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="modal-mobile">
+          <div className="modal-content-mobile md:max-w-2xl">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
               <h3 className="text-xl font-semibold text-gray-900">Leave Request Details</h3>
               <button
@@ -392,7 +437,7 @@ const MyLeaves: React.FC = () => {
               </button>
             </div>
             <div className="p-6 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-500">Request ID</label>
                   <p className="text-lg font-semibold text-gray-900">{selectedLeave.id}</p>
@@ -438,12 +483,12 @@ const MyLeaves: React.FC = () => {
                 </div>
               )}
 
-              {selectedLeave.approver && (
+              {selectedLeave.approvedBy && (
                 <div>
                   <label className="text-sm font-medium text-gray-500">Final Approved By</label>
-                  <p className="text-gray-900 mt-1">{selectedLeave.approver}</p>
-                  {selectedLeave.approvedDate && (
-                    <p className="text-sm text-gray-600">on {new Date(selectedLeave.approvedDate).toLocaleDateString()}</p>
+                  <p className="text-gray-900 mt-1">{selectedLeave.approvedBy}</p>
+                  {selectedLeave.approvedAt && (
+                    <p className="text-sm text-gray-600">on {new Date(selectedLeave.approvedAt).toLocaleDateString()}</p>
                   )}
                 </div>
               )}
@@ -452,18 +497,6 @@ const MyLeaves: React.FC = () => {
                 <div>
                   <label className="text-sm font-medium text-gray-500">Remarks</label>
                   <p className="text-gray-900 mt-1 p-3 bg-gray-50 rounded-lg">{selectedLeave.remarks}</p>
-                </div>
-              )}
-
-              {/* Replace static Approval Process Information with dynamic flow */}
-              {selectedLeave.approvalFlow && (
-              <div className="bg-blue-50 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 mb-2">Approval Flow for This Request</h4>
-                  <ol className="list-decimal list-inside text-blue-800 space-y-1">
-                    {selectedLeave.approvalFlow.map((step, idx) => (
-                      <li key={idx}>{step}</li>
-                    ))}
-                  </ol>
                 </div>
               )}
             </div>

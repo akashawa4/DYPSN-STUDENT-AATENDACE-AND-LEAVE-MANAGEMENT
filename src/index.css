@@ -118,13 +118,13 @@
 
   /* Mobile modal styles */
   .modal-mobile {
-    @apply fixed inset-0 z-50 flex items-center justify-center p-4;
+    @apply fixed inset-0 z-[80] flex items-center justify-center p-4;
     @apply bg-black bg-opacity-50 backdrop-blur-sm;
   }
 
   .modal-content-mobile {
     @apply bg-white rounded-2xl shadow-mobile-lg max-w-sm w-full max-h-[90vh] overflow-y-auto;
-    @apply animate-scale-in;
+    @apply animate-scale-in pb-safe-area-inset-bottom;
   }
 
   /* Mobile list styles */

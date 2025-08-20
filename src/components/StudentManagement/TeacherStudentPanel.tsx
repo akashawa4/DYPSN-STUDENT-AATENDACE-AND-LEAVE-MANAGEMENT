@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { userService, attendanceService } from '../../firebase/firestore';
 import { User, AttendanceLog } from '../../types';
-import { Users, Search, Filter, Download, Eye, Upload, Plus, Edit, Trash2, Calendar, FileText, BarChart3 } from 'lucide-react';
+import { Users, Search, Filter, Download, Eye, Upload, Plus, Edit, Trash2, Calendar, FileText, BarChart3, X } from 'lucide-react';
 
 interface TeacherStudentPanelProps {
   user: User;
@@ -706,20 +706,31 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
   };
 
   const handleDeleteStudent = async (student: User) => {
-    if (!confirm(`Are you sure you want to delete ${student.name}? This action cannot be undone.`)) {
-      return;
-    }
+    setStudentToDelete(student);
+    setShowDeleteModal(true);
+  };
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<User | null>(null);
+
+  const confirmDelete = async () => {
+    if (!studentToDelete) return;
+    
     try {
-      // Delete from both regular users collection and organized collection
-      await userService.deleteUser(student.id);
-      await userService.deleteOrganizedStudentCollection(student);
-      
-      fetchStudents();
+      await userService.deleteUser(studentToDelete.id);
+      await userService.deleteOrganizedStudentCollection(studentToDelete);
+      setShowDeleteModal(false);
+      setStudentToDelete(null);
+      fetchStudents(); // Refresh the student list
     } catch (error) {
       console.error('Error deleting student:', error);
       alert('Error deleting student');
     }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteModal(false);
+    setStudentToDelete(null);
   };
 
   return (
@@ -1547,6 +1558,42 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
                   {exporting ? 'Exporting...' : 'Export'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-mobile-lg animate-scale-in">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Delete Student</h3>
+              <button
+                onClick={cancelDelete}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Are you sure you want to delete <span className="font-semibold text-gray-900">{studentToDelete?.name}</span>? This action cannot be undone.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={cancelDelete}
+                className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors active:scale-95"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>

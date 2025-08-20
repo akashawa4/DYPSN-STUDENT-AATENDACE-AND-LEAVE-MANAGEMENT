@@ -71,8 +71,8 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="modal-mobile">
+      <div className="modal-content-mobile md:max-w-3xl">
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <h3 className="text-xl font-semibold text-gray-900">Leave Request Review</h3>
           <button
@@ -422,10 +422,10 @@ const LeaveApprovalPanel: React.FC = () => {
       {/* Animated banner for approval/rejection/return */}
       {banner && (
         <div
-          className={`fixed left-1/2 top-6 z-50 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg text-white text-lg font-semibold transition-all duration-500 ease-in-out
-            ${banner.type === 'approve' ? 'bg-green-600 animate-slide-down-fade' : ''}
-            ${banner.type === 'reject' ? 'bg-red-600 animate-slide-down-fade' : ''}
-            ${banner.type === 'return' ? 'bg-amber-600 animate-slide-down-fade' : ''}
+          className={`fixed left-1/2 top-6 z-50 -translate-x-1/2 px-6 py-3 rounded-lg shadow-mobile-lg text-white text-lg font-semibold transition-all duration-500 ease-in-out
+            ${banner.type === 'approve' ? 'bg-green-600 animate-slide-down' : ''}
+            ${banner.type === 'reject' ? 'bg-red-600 animate-slide-down' : ''}
+            ${banner.type === 'return' ? 'bg-amber-600 animate-slide-down' : ''}
           `}
           style={{ minWidth: 320, textAlign: 'center' }}
         >
@@ -495,7 +495,7 @@ const LeaveApprovalPanel: React.FC = () => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
-              placeholder="Search by employee name, ID, or reason..."
+              placeholder="Search by student name, ID, or reason..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -526,9 +526,54 @@ const LeaveApprovalPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Requests Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Requests - Mobile Cards */}
+      <div className="md:hidden space-y-3">
+        {filteredRequests.map((request) => (
+          <div key={request.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-mobile">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                  <User className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">{request.userName}</p>
+                  <p className="text-xs text-gray-500">ID: {request.userId}</p>
+                  <p className="text-xs text-gray-500">{request.department}</p>
+                </div>
+              </div>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
+                {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+              </span>
+            </div>
+
+            <div className="mt-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{getLeaveTypeName(request.leaveType)}</span>
+                <span className="text-xs text-gray-600">
+                  {new Date(request.fromDate).toLocaleDateString()} - {new Date(request.toDate).toLocaleDateString()}
+                </span>
+              </div>
+              <p className="text-gray-600 mt-1 line-clamp-2">{request.reason}</p>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between">
+              <span className="inline-flex px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700">
+                {request.currentApprovalLevel || 'HOD'}
+              </span>
+              <button
+                onClick={() => { setSelectedRequest(request); setShowApprovalModal(true); }}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm active:scale-95"
+              >
+                Review
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Requests Table - Desktop */}
+      <div className="hidden md:block bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="overflow-x-auto scrollbar-mobile-h">
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
