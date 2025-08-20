@@ -138,6 +138,38 @@ export const userService = {
     return !querySnapshot.empty;
   },
 
+  // Validate student credentials (email and phone number)
+  async validateStudentCredentials(email: string, phoneNumber: string): Promise<User | null> {
+    const usersRef = collection(db, COLLECTIONS.USERS);
+    const q = query(
+      usersRef, 
+      where('email', '==', email), 
+      where('role', '==', 'student')
+    );
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return null;
+    }
+    
+    const student = querySnapshot.docs[0].data() as User;
+    
+    // Check if phone number matches (with or without country code)
+    const studentPhone = student.phone || '';
+    const normalizedStudentPhone = studentPhone.replace(/\D/g, ''); // Remove non-digits
+    const normalizedInputPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+    
+    // Check if phone numbers match (allowing for different formats)
+    if (normalizedStudentPhone === normalizedInputPhone || 
+        studentPhone === phoneNumber ||
+        studentPhone.endsWith(phoneNumber) ||
+        phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
+      return { id: querySnapshot.docs[0].id, ...student };
+    }
+    
+    return null;
+  },
+
   // Bulk import students
   async bulkImportStudents(students: User[]): Promise<void> {
     const batch = writeBatch(db);

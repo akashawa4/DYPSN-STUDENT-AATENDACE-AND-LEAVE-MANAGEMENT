@@ -5,10 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User as FirebaseUser,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink,
-  signInWithEmailLink
+  User as FirebaseUser
 } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
 import { userService } from '../firebase/firestore';
@@ -16,9 +13,7 @@ import { userService } from '../firebase/firestore';
 interface AuthContextType {
   user: User | null;
   firebaseUser: FirebaseUser | null;
-  login: (email: string, password?: string) => Promise<void>;
-  sendEmailLink: (email: string) => Promise<void>;
-  completeEmailLinkSignIn: (email: string, link: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, userData: Partial<User>) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
@@ -34,42 +29,102 @@ const mockUsers: User[] = [
     name: 'Demo Student',
     email: 'student.demo@dypsn.edu',
     role: 'student',
-    department: 'Computer Science',
+    department: 'CSE',
     accessLevel: 'basic',
     isActive: true,
     avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150',
     phone: '+91 90000 00001',
     rollNumber: 'STU001',
+    year: '2',
+    sem: '3',
+    div: 'A',
     joiningDate: '2022-08-01',
-    designation: 'Student'
+    designation: 'Student',
+    gender: 'Male'
+  },
+  {
+    id: 'student002',
+    name: 'Demo Student 2',
+    email: 'student2.demo@dypsn.edu',
+    role: 'student',
+    department: 'CSE',
+    accessLevel: 'basic',
+    isActive: true,
+    avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150',
+    phone: '+91 90000 00002',
+    rollNumber: 'STU002',
+    year: '2',
+    sem: '3',
+    div: 'A',
+    joiningDate: '2022-08-01',
+    designation: 'Student',
+    gender: 'Female'
+  },
+  {
+    id: 'student003',
+    name: 'Demo Student 3',
+    email: 'student3.demo@dypsn.edu',
+    role: 'student',
+    department: 'CSE',
+    accessLevel: 'basic',
+    isActive: true,
+    avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150',
+    phone: '+91 90000 00003',
+    rollNumber: 'STU003',
+    year: '3',
+    sem: '5',
+    div: 'B',
+    joiningDate: '2021-08-01',
+    designation: 'Student',
+    gender: 'Male'
+  },
+  {
+    id: 'student004',
+    name: 'Demo Student 4',
+    email: 'student4.demo@dypsn.edu',
+    role: 'student',
+    department: 'CSE',
+    accessLevel: 'basic',
+    isActive: true,
+    avatar: 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150',
+    phone: '+91 90000 00004',
+    rollNumber: 'STU004',
+    year: '4',
+    sem: '7',
+    div: 'A',
+    joiningDate: '2020-08-01',
+    designation: 'Student',
+    gender: 'Female'
   },
   {
     id: 'teacher001',
     name: 'Demo Teacher',
     email: 'teacher.demo@dypsn.edu',
     role: 'teacher',
-    department: 'Computer Science',
+    department: 'CSE',
     accessLevel: 'approver',
     isActive: true,
     avatar: 'https://images.pexels.com/photos/936126/pexels-photo-936126.jpeg?auto=compress&cs=tinysrgb&w=150',
-    phone: '+91 90000 00002',
+    phone: '+91 90000 00005',
     rollNumber: 'TCH001',
     joiningDate: '2020-01-15',
-    designation: 'Teacher'
+    designation: 'Assistant Professor',
+    gender: 'Female'
   },
   {
     id: 'hod001',
     name: 'Demo HOD',
     email: 'hod.demo@dypsn.edu',
     role: 'hod',
-    department: 'Computer Science',
+    department: 'CSE',
     accessLevel: 'full',
     isActive: true,
     avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=150',
-    phone: '+91 90000 00003',
+    phone: '+91 90000 00006',
     rollNumber: 'HOD001',
     joiningDate: '2018-06-01',
-    designation: 'Head of Department'
+    designation: 'Head of Department',
+    gender: 'Male'
   }
 ];
 
@@ -101,13 +156,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     ensureDemoUsers();
 
-    // Handle email link sign-in on app load
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-      const email = window.localStorage.getItem('emailForSignIn');
-      if (email) {
-        completeEmailLinkSignIn(email, window.location.href);
-      }
-    }
     // Listen for Firebase Auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setFirebaseUser(firebaseUser);
@@ -158,87 +206,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password?: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // First check if the user exists in our database
-      const existingUser = await userService.getUser(email);
-      
-      if (!existingUser) {
-        // Check if it's a demo user
-        const foundUser = mockUsers.find(u => u.email === email);
-        if (foundUser) {
-          // Save user data to Firestore
-          try {
-            console.log('[AuthContext] Demo user login:', foundUser.email);
-            
-            // Check if user already exists in Firestore
-            const existingDemoUser = await userService.getUser(foundUser.id);
-            
-            if (existingDemoUser) {
-              console.log('[AuthContext] Updating existing user:', foundUser.id);
-              // Update existing user with new login info
-              await userService.updateUser(foundUser.id, {
-                lastLogin: new Date().toISOString(),
-                loginCount: (existingDemoUser.loginCount || 0) + 1
-              });
-            } else {
-              console.log('[AuthContext] Creating new user in Firestore:', foundUser.id);
-              // Create new user in Firestore
-              await userService.createUser({
-                ...foundUser,
-                lastLogin: new Date().toISOString(),
-                loginCount: 1,
-                createdAt: new Date().toISOString()
-              });
-            }
-            console.log('[AuthContext] User data saved to Firestore successfully');
-          } catch (error) {
-            console.error('Error saving user data to Firestore:', error);
-            // Continue with login even if Firestore save fails
-          }
-          setUser(foundUser);
-          localStorage.setItem('dypsn_user', JSON.stringify(foundUser));
+      // First check if it's a demo user
+      const foundDemoUser = mockUsers.find(u => u.email === email);
+      if (foundDemoUser) {
+        // Demo user login
+        console.log('[AuthContext] Demo user login:', foundDemoUser.email);
+        
+        // Check if user already exists in Firestore
+        const existingDemoUser = await userService.getUser(foundDemoUser.id);
+        
+        if (existingDemoUser) {
+          console.log('[AuthContext] Updating existing user:', foundDemoUser.id);
+          // Update existing user with new login info
+          await userService.updateUser(foundDemoUser.id, {
+            lastLogin: new Date().toISOString(),
+            loginCount: (existingDemoUser.loginCount || 0) + 1
+          });
         } else {
-          throw new Error('User not found in database. Please contact administrator.');
+          console.log('[AuthContext] Creating new user in Firestore:', foundDemoUser.id);
+          // Create new user in Firestore
+          await userService.createUser({
+            ...foundDemoUser,
+            lastLogin: new Date().toISOString(),
+            loginCount: 1,
+            createdAt: new Date().toISOString()
+          });
         }
-      } else {
-        // User exists in database, proceed with authentication
-        if (password) {
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
-          // User data will be handled by the auth state listener
+        console.log('[AuthContext] User data saved to Firestore successfully');
+        setUser(foundDemoUser);
+        localStorage.setItem('dypsn_user', JSON.stringify(foundDemoUser));
+        return;
+      }
+
+      // Check if it's a student trying to login with phone number as password
+      const student = await userService.validateStudentCredentials(email, password);
+      if (student) {
+        console.log('[AuthContext] Student login with phone number:', student.email);
+        
+        // Update student login info
+        await userService.updateUser(student.id, {
+          lastLogin: new Date().toISOString(),
+          loginCount: (student.loginCount || 0) + 1
+        });
+        
+        setUser(student);
+        localStorage.setItem('dypsn_user', JSON.stringify(student));
+        return;
+      }
+
+      // Try regular Firebase authentication for teachers/HODs
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        // User data will be handled by the auth state listener
+        console.log('[AuthContext] Firebase authentication successful');
+      } catch (firebaseError: any) {
+        // If Firebase auth fails, check if user exists in our database
+        const existingUser = await userService.getUser(email);
+        if (existingUser) {
+          throw new Error('Invalid password. Please try again.');
         } else {
-          throw new Error('Passwordless sign-in requires email link. Use sendEmailLink.');
+          throw new Error('User not found. Please check your email or contact administrator.');
         }
       }
-    } catch (firebaseError: any) {
-      console.error('Login error:', firebaseError);
-      throw new Error(firebaseError.message || 'Login failed');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const sendEmailLink = async (email: string) => {
-    setIsLoading(true);
-    try {
-      const actionCodeSettings = {
-        url: window.location.origin,
-        handleCodeInApp: true
-      };
-      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-      window.localStorage.setItem('emailForSignIn', email);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const completeEmailLinkSignIn = async (email: string, link: string) => {
-    setIsLoading(true);
-    try {
-      const result = await signInWithEmailLink(auth, email, link);
-      window.localStorage.removeItem('emailForSignIn');
-      // User data will be handled by the auth state listener
+    } catch (error: any) {
+      console.error('Login error:', error);
+      throw new Error(error.message || 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -314,7 +349,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, login, sendEmailLink, completeEmailLinkSignIn, signUp, logout, isLoading, ensureDemoUsersInFirestore }}>
+    <AuthContext.Provider value={{ user, firebaseUser, login, signUp, logout, isLoading, ensureDemoUsersInFirestore }}>
       {children}
     </AuthContext.Provider>
   );

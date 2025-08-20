@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FileText, CheckCircle, AlertCircle, X, Calendar, TrendingUp, User, MapPin } from 'lucide-react';
+import { Clock, FileText, CheckCircle, AlertCircle, X, Calendar, TrendingUp, User, MapPin, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { leaveService, attendanceService } from '../../firebase/firestore';
 import { LeaveRequest } from '../../types';
@@ -34,24 +34,47 @@ const DetailModal: React.FC<DetailModalProps> = ({ isOpen, onClose, title, child
   );
 };
 
-const DashboardStats: React.FC = () => {
+interface DashboardStatsProps {
+  dashboardData?: {
+    attendance: { present: number; total: number; percentage: number };
+    leaveBalance: { total: number; casual: number; sick: number };
+    pendingRequests: number;
+    approvedLeaves: number;
+  };
+  loading?: boolean;
+  studentData?: Array<{
+    year: string;
+    sem: string;
+    div: string;
+    count: number;
+    students: any[];
+  }>;
+  totalStudents?: number;
+  userRole?: string;
+}
+
+const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading, studentData, totalStudents, userRole }) => {
   const { user } = useAuth();
   const [selectedModal, setSelectedModal] = useState<string | null>(null);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [navigationState, setNavigationState] = useState<'year' | 'semester' | 'division' | 'students'>('year');
+  const [selectedYear, setSelectedYear] = useState<string>('');
+  const [selectedSemester, setSelectedSemester] = useState<string>('');
+  const [selectedDivision, setSelectedDivision] = useState<string>('');
 
   // Load user's leave requests for stats
   useEffect(() => {
     const loadLeaveRequests = async () => {
       if (!user) return;
       try {
-        setLoading(true);
+        setStatsLoading(true);
         const requests = await leaveService.getLeaveRequestsByUser(user.id);
         setLeaveRequests(requests);
       } catch (error) {
         console.error('Error loading leave requests for stats:', error);
       } finally {
-        setLoading(false);
+        setStatsLoading(false);
       }
     };
     loadLeaveRequests();
@@ -60,6 +83,49 @@ const DashboardStats: React.FC = () => {
   // Calculate stats from real data
   const calculateStats = () => {
     if (!user) return [];
+    
+    if (user.role === 'student' && dashboardData) {
+      // Student stats with real data
+      return [
+        {
+          id: 'attendance',
+          title: 'This Month Attendance',
+          value: `${dashboardData.attendance.present}/${dashboardData.attendance.total}`,
+          change: `+${dashboardData.attendance.percentage}%`,
+          changeType: 'positive' as const,
+          icon: Clock,
+          color: 'blue'
+        },
+        {
+          id: 'leaveBalance',
+          title: 'Leave Balance',
+          value: `${dashboardData.leaveBalance.total} days`,
+          change: `CL: ${dashboardData.leaveBalance.casual}, SL: ${dashboardData.leaveBalance.sick}`,
+          changeType: 'positive' as const,
+          icon: FileText,
+          color: 'green'
+        },
+        {
+          id: 'pendingRequests',
+          title: 'Pending Requests',
+          value: dashboardData.pendingRequests.toString(),
+          change: 'Awaiting approval',
+          changeType: 'warning' as const,
+          icon: AlertCircle,
+          color: 'amber'
+        },
+        {
+          id: 'approvedLeaves',
+          title: 'Approved Leaves',
+          value: dashboardData.approvedLeaves.toString(),
+          change: 'This month',
+          changeType: 'positive' as const,
+          icon: CheckCircle,
+          color: 'green'
+        }
+      ];
+    }
+
     const pendingRequests = leaveRequests.filter(req => req.status === 'pending').length;
     const approvedRequests = leaveRequests.filter(req => req.status === 'approved').length;
     const totalRequests = leaveRequests.length;
@@ -98,86 +164,345 @@ const DashboardStats: React.FC = () => {
           id: 'leaves',
           title: 'Monthly Leaves',
           value: totalRequests.toString(),
-          change: `${approvedRequests} approved`,
-          changeType: 'neutral' as const,
+          change: 'This month',
+          changeType: 'positive' as const,
           icon: FileText,
           color: 'purple'
         }
       ];
-    } else if (user.role === 'teacher') {
-      // Teacher stats
+    }
+
+    // Teacher/HOD stats with real student data
+    if (studentData && totalStudents !== undefined) {
+      console.log('Calculating stats with student data:', studentData);
+      console.log('Total students:', totalStudents);
+      
+      const year2Count = studentData.filter(d => {
+        const year = d.year?.toString().toLowerCase();
+        return year === '2' || year?.includes('2') || year?.includes('2nd') || year?.includes('second');
+      }).reduce((sum, d) => sum + d.count, 0);
+      
+      const year3Count = studentData.filter(d => {
+        const year = d.year?.toString().toLowerCase();
+        return year === '3' || year?.includes('3') || year?.includes('3rd') || year?.includes('third');
+      }).reduce((sum, d) => sum + d.count, 0);
+      
+      const year4Count = studentData.filter(d => {
+        const year = d.year?.toString().toLowerCase();
+        return year === '4' || year?.includes('4') || year?.includes('4th') || year?.includes('fourth');
+      }).reduce((sum, d) => sum + d.count, 0);
+      
+      console.log('Year counts:', { year2: year2Count, year3: year3Count, year4: year4Count });
+      
       return [
         {
-          id: 'attendance',
-          title: 'This Month Attendance',
-          value: '22/24',
-          change: '+2.5%',
+          id: 'students',
+          title: 'Total Students',
+          value: totalStudents.toString(),
+          change: 'CSE Department',
           changeType: 'positive' as const,
-          icon: Clock,
+          icon: User,
           color: 'blue'
         },
         {
-          id: 'balance',
-          title: 'Leave Balance',
-          value: '8 days',
-          change: 'CL: 3, EL: 5',
-          changeType: 'neutral' as const,
-          icon: FileText,
-          color: 'green'
-        },
-        {
-          id: 'pending',
-          title: 'Pending Requests',
-          value: pendingRequests.toString(),
-          change: 'Awaiting approval',
-          changeType: 'warning' as const,
-          icon: AlertCircle,
-          color: 'amber'
-        },
-        {
-          id: 'approved',
-          title: 'Approved Leaves',
-          value: approvedRequests.toString(),
-          change: 'This month',
+          id: 'year2',
+          title: '2nd Year',
+          value: year2Count.toString(),
+          change: 'Students',
           changeType: 'positive' as const,
-          icon: CheckCircle,
+          icon: Users,
           color: 'green'
+        },
+        {
+          id: 'year3',
+          title: '3rd Year',
+          value: year3Count.toString(),
+          change: 'Students',
+          changeType: 'positive' as const,
+          icon: Users,
+          color: 'purple'
+        },
+        {
+          id: 'year4',
+          title: '4th Year',
+          value: year4Count.toString(),
+          change: 'Students',
+          changeType: 'positive' as const,
+          icon: Users,
+          color: 'indigo'
         }
       ];
-    } else if (user.role === 'student') {
-      // Student stats: only their own attendance and leave stats
+    }
+
+    // Fallback Teacher/HOD stats
       return [
+      {
+        id: 'students',
+        title: 'Total Students',
+        value: '45',
+        change: 'In your class',
+        changeType: 'positive' as const,
+        icon: User,
+        color: 'blue'
+      },
         {
           id: 'attendance',
-          title: 'Present Days',
-          value: '0', // You can fetch real attendance data if available
-          change: '',
-          changeType: 'neutral' as const,
+        title: 'Today\'s Attendance',
+        value: '42/45',
+        change: '93% present',
+        changeType: 'positive' as const,
           icon: CheckCircle,
           color: 'green'
         },
         {
           id: 'leaves',
-          title: 'Leave Requests',
-          value: totalRequests.toString(),
-          change: `${approvedRequests} approved`,
-          changeType: 'neutral' as const,
-          icon: FileText,
-          color: 'blue'
-        },
-        {
-          id: 'pending',
-          title: 'Pending Requests',
+        title: 'Pending Leaves',
           value: pendingRequests.toString(),
-          change: '',
+        change: 'Requires review',
           changeType: 'warning' as const,
           icon: AlertCircle,
           color: 'amber'
-        }
-      ];
-    } else {
-      // Default fallback
-      return [];
+      },
+      {
+        id: 'approvals',
+        title: 'Approved Today',
+        value: approvedRequests.toString(),
+        change: 'This session',
+        changeType: 'positive' as const,
+        icon: CheckCircle,
+        color: 'green'
+      }
+    ];
+  };
+
+  const handleModalOpen = (modalId: string) => {
+    setSelectedModal(modalId);
+    setNavigationState('year');
+    setSelectedYear('');
+    setSelectedSemester('');
+    setSelectedDivision('');
+  };
+
+  const handleYearSelect = (year: string) => {
+    setSelectedYear(year);
+    setNavigationState('semester');
+  };
+
+  const handleSemesterSelect = (semester: string) => {
+    setSelectedSemester(semester);
+    setNavigationState('division');
+  };
+
+  const handleDivisionSelect = (division: string) => {
+    setSelectedDivision(division);
+    setNavigationState('students');
+  };
+
+  const handleBack = () => {
+    if (navigationState === 'students') {
+      setNavigationState('division');
+      setSelectedDivision('');
+    } else if (navigationState === 'division') {
+      setNavigationState('semester');
+      setSelectedSemester('');
+    } else if (navigationState === 'semester') {
+      setNavigationState('year');
+      setSelectedYear('');
+    }
+  };
+
+  const renderStudentNavigation = () => {
+    if (!studentData) {
+      console.log('No student data available in modal');
+      return <div className="text-gray-500">No student data available</div>;
+    }
+
+    console.log('Modal student data:', studentData);
+    console.log('Navigation state:', navigationState);
+
+    switch (navigationState) {
+      case 'year':
+        // Get all unique years from the data
+        const availableYears = [...new Set(studentData.map(d => d.year))].sort();
+        console.log('Available years in data:', availableYears);
+        
+        return (
+          <div className="space-y-3">
+            <h4 className="text-lg font-semibold text-gray-900 mb-4">Select Year</h4>
+            {['2', '3', '4'].map(year => {
+              // More flexible year matching
+              const yearData = studentData.filter(d => {
+                const studentYear = d.year?.toString().toLowerCase();
+                const targetYear = year.toString().toLowerCase();
+                return studentYear === targetYear || 
+                       studentYear?.includes(targetYear) || 
+                       (year === '2' && (studentYear?.includes('2nd') || studentYear?.includes('second'))) ||
+                       (year === '3' && (studentYear?.includes('3rd') || studentYear?.includes('third'))) ||
+                       (year === '4' && (studentYear?.includes('4th') || studentYear?.includes('fourth')));
+              });
+              const totalInYear = yearData.reduce((sum, d) => sum + d.count, 0);
+              console.log(`Year ${year} data:`, yearData, 'Total:', totalInYear);
+              return (
+                <button
+                  key={year}
+                  onClick={() => handleYearSelect(year)}
+                  className="w-full p-4 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors active:scale-95 border border-blue-200 text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold text-blue-900">{year}nd Year</span>
+                    <span className="text-2xl font-bold text-blue-700">{totalInYear}</span>
+                  </div>
+                  <p className="text-sm text-blue-600 mt-1">Students</p>
+                </button>
+              );
+            })}
+            
+            {/* Debug info */}
+            <div className="mt-4 p-3 bg-gray-100 rounded-lg text-xs text-gray-600">
+              <p>Debug: Available years in data: {availableYears.join(', ')}</p>
+              <p>Total student records: {studentData.length}</p>
+              <p>Total students: {studentData.reduce((sum, d) => sum + d.count, 0)}</p>
+            </div>
+            
+            {/* Show all available years if standard years have no data */}
+            {availableYears.length > 0 && availableYears.some(y => !['2', '3', '4'].includes(y)) && (
+              <div className="mt-4">
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Other Available Years:</h5>
+                {availableYears.filter(y => !['2', '3', '4'].includes(y)).map(year => {
+                  const yearData = studentData.filter(d => d.year === year);
+                  const totalInYear = yearData.reduce((sum, d) => sum + d.count, 0);
+                  return (
+                    <button
+                      key={year}
+                      onClick={() => handleYearSelect(year)}
+                      className="w-full p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors active:scale-95 border border-gray-200 text-left mb-2"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Year {year}</span>
+                        <span className="text-lg font-bold text-gray-600">{totalInYear}</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Students</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'semester':
+        const yearData = studentData.filter(d => d.year === selectedYear);
+        const semesters = [...new Set(yearData.map(d => d.sem))].sort();
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={handleBack}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                ← Back
+              </button>
+              <h4 className="text-lg font-semibold text-gray-900">{selectedYear}nd Year - Select Semester</h4>
+            </div>
+            {semesters.map(sem => {
+              const semData = yearData.filter(d => d.sem === sem);
+              const totalInSem = semData.reduce((sum, d) => sum + d.count, 0);
+              return (
+                <button
+                  key={sem}
+                  onClick={() => handleSemesterSelect(sem)}
+                  className="w-full p-4 bg-green-50 hover:bg-green-100 rounded-xl transition-colors active:scale-95 border border-green-200 text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold text-green-900">Semester {sem}</span>
+                    <span className="text-2xl font-bold text-green-700">{totalInSem}</span>
+                  </div>
+                  <p className="text-sm text-green-600 mt-1">Students</p>
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case 'division':
+        const semData = studentData.filter(d => d.year === selectedYear && d.sem === selectedSemester);
+        const divisions = [...new Set(semData.map(d => d.div))].sort();
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={handleBack}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                ← Back
+              </button>
+              <h4 className="text-lg font-semibold text-gray-900">
+                {selectedYear}nd Year - Sem {selectedSemester} - Select Division
+              </h4>
+            </div>
+            {divisions.map(div => {
+              const divData = semData.filter(d => d.div === div);
+              return (
+                <button
+                  key={div}
+                  onClick={() => handleDivisionSelect(div)}
+                  className="w-full p-4 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors active:scale-95 border border-purple-200 text-left"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-semibold text-purple-900">Division {div}</span>
+                    <span className="text-2xl font-bold text-purple-700">{divData[0]?.count || 0}</span>
+                  </div>
+                  <p className="text-sm text-purple-600 mt-1">Students</p>
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case 'students':
+        const divData = studentData.filter(d => 
+          d.year === selectedYear && 
+          d.sem === selectedSemester && 
+          d.div === selectedDivision
+        );
+        const students = divData[0]?.students || [];
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={handleBack}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                ← Back
+              </button>
+              <h4 className="text-lg font-semibold text-gray-900">
+                {selectedYear}nd Year - Sem {selectedSemester} - Div {selectedDivision}
+              </h4>
+            </div>
+            <div className="max-h-96 overflow-y-auto space-y-2">
+              {students.map((student, index) => (
+                <div
+                  key={index}
+                  className="p-3 bg-gray-50 rounded-lg border border-gray-200"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">{student.name}</p>
+                      <p className="text-sm text-gray-600">Roll: {student.rollNumber}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">{student.email}</p>
+                      <p className="text-xs text-gray-500">{student.phone}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      default:
+        return <div>No details available</div>;
     }
   };
 
@@ -480,7 +805,7 @@ const DashboardStats: React.FC = () => {
     }
   };
 
-  if (loading) {
+  if (loading || statsLoading) {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[...Array(4)].map((_, index) => (
@@ -510,7 +835,7 @@ const DashboardStats: React.FC = () => {
               className={`card-mobile transition-all duration-200 ${
                 isClickable ? 'hover:shadow-mobile-lg hover:scale-105 cursor-pointer active:scale-95' : 'hover:shadow-mobile-lg'
               }`}
-              onClick={() => isClickable && setSelectedModal(stat.id)}
+              onClick={() => isClickable && handleModalOpen(stat.id)}
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
@@ -565,6 +890,15 @@ const DashboardStats: React.FC = () => {
         title="Approved Leaves"
       >
         {renderModalContent('approved')}
+      </DetailModal>
+
+      {/* Student Navigation Modal */}
+      <DetailModal
+        isOpen={selectedModal === 'students' || selectedModal === 'year2' || selectedModal === 'year3' || selectedModal === 'year4'}
+        onClose={() => setSelectedModal(null)}
+        title="Student Management"
+      >
+        {renderStudentNavigation()}
       </DetailModal>
     </>
   );

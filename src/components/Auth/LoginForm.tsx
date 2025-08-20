@@ -4,20 +4,21 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [activeTab, setActiveTab] = useState<'email' | 'demo'>('email');
-  const { sendEmailLink, login, isLoading, ensureDemoUsersInFirestore } = useAuth();
+  const [activeTab, setActiveTab] = useState<'login' | 'demo'>('login');
+  const { login, isLoading, ensureDemoUsersInFirestore } = useAuth();
 
-  const handleEmailLink = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setSuccess('');
     try {
-      await sendEmailLink(email);
-      setSuccess('Sign-in link sent! Check your email.');
+      await login(email, password);
+      setSuccess('Login successful!');
     } catch (err: any) {
-      setError(err.message || 'Failed to send sign-in link.');
+      setError(err.message || 'Invalid credentials. Please try again.');
     }
   };
 
@@ -27,6 +28,7 @@ const LoginForm: React.FC = () => {
     setSuccess('');
     try {
       await login(email, 'demo123');
+      setSuccess('Demo login successful!');
     } catch (err: any) {
       setError('Invalid credentials. Please try again.');
     }
@@ -44,7 +46,10 @@ const LoginForm: React.FC = () => {
   };
 
   const demoUsers = [
-    { role: 'Student', email: 'student.demo@dypsn.edu', password: 'demo123' },
+    { role: 'Student 2nd Year', email: 'student.demo@dypsn.edu', password: 'demo123' },
+    { role: 'Student 2nd Year', email: 'student2.demo@dypsn.edu', password: 'demo123' },
+    { role: 'Student 3rd Year', email: 'student3.demo@dypsn.edu', password: 'demo123' },
+    { role: 'Student 4th Year', email: 'student4.demo@dypsn.edu', password: 'demo123' },
     { role: 'Teacher', email: 'teacher.demo@dypsn.edu', password: 'demo123' },
     { role: 'HOD', email: 'hod.demo@dypsn.edu', password: 'demo123' }
   ];
@@ -72,17 +77,17 @@ const LoginForm: React.FC = () => {
           {/* Tab Navigation */}
           <div className="flex bg-gray-50">
             <button
-              onClick={() => setActiveTab('email')}
+              onClick={() => setActiveTab('login')}
               className={`flex-1 py-3 px-4 text-sm font-medium transition-all duration-200 ${
-                activeTab === 'email' 
+                activeTab === 'login' 
                   ? 'bg-white text-blue-600 shadow-mobile border-t-2 border-blue-600' 
                   : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
               }`}
             >
               <div className="flex items-center justify-center space-x-2">
-                <Mail className="w-4 h-4" />
-                <span className="hidden sm:inline">Email Link</span>
-                <span className="sm:hidden">Email</span>
+                <LogIn className="w-4 h-4" />
+                <span className="hidden sm:inline">Login</span>
+                <span className="sm:hidden">Login</span>
               </div>
             </button>
             <button
@@ -103,8 +108,8 @@ const LoginForm: React.FC = () => {
 
           {/* Form Content */}
           <div className="p-6">
-            {activeTab === 'email' && (
-              <form onSubmit={handleEmailLink} className="space-y-4">
+            {activeTab === 'login' && (
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="label-mobile">
                     Email Address
@@ -117,6 +122,23 @@ const LoginForm: React.FC = () => {
                     placeholder="Enter your email address"
                     required
                   />
+                </div>
+                
+                <div>
+                  <label className="label-mobile">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="input-mobile"
+                    placeholder="Enter your password"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Students: Use your phone number as password
+                  </p>
                 </div>
                 
                 {error && (
@@ -139,12 +161,12 @@ const LoginForm: React.FC = () => {
                   {isLoading ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      <span>Sending link...</span>
+                      <span>Signing in...</span>
                     </>
                   ) : (
                     <>
-                      <Mail className="w-5 h-5" />
-                      <span>Send Sign-In Link</span>
+                      <LogIn className="w-5 h-5" />
+                      <span>Sign In</span>
                     </>
                   )}
                 </button>
@@ -159,7 +181,7 @@ const LoginForm: React.FC = () => {
                   </label>
                   
                   {/* Demo Account Quick Select */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="grid grid-cols-2 gap-2 mb-3">
                     {demoUsers.map((user, index) => (
                       <button
                         key={index}
@@ -184,6 +206,9 @@ const LoginForm: React.FC = () => {
                     placeholder="Demo account email"
                     required
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Demo students: Use "demo123" as password
+                  </p>
                 </div>
                 
                 {error && (
