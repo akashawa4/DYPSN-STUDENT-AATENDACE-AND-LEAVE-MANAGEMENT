@@ -43,17 +43,8 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Center Section - Hidden on mobile */}
-        <div className="hidden lg:block flex-1 max-w-md mx-8">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-          </div>
-        </div>
+        {/* Center section removed (no global search) */}
+        <div className="hidden lg:block flex-1 max-w-md mx-8" />
 
         {/* Right Section */}
         <div className="flex items-center space-x-2">
@@ -137,17 +128,7 @@ const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Mobile Search Bar */}
-      <div className="lg:hidden px-4 pb-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search students, leaves, attendance..."
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50"
-          />
-        </div>
-      </div>
+      {/* Mobile search removed */}
     </header>
   );
 };

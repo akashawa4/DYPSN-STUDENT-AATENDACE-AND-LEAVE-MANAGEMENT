@@ -841,8 +841,75 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Students Table */}
-      <div className="overflow-x-auto">
+      {/* Students List - Mobile (cards) */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="text-center text-gray-500 py-6">Loading students...</div>
+        ) : filteredStudents.length === 0 ? (
+          <div className="text-center text-gray-500 py-6">No students found</div>
+        ) : (
+          filteredStudents.map((student) => (
+            <div key={student.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-mobile">
+              <div className="flex items-center">
+                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-sm font-semibold text-blue-600">
+                    {student.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  </span>
+                </div>
+                <div className="ml-3 min-w-0">
+                  <div className="font-semibold text-gray-900 truncate">{student.name}</div>
+                  <div className="text-sm text-gray-600 truncate">{student.email}</div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-gray-500">Roll No.</div>
+                  <div className="text-gray-900 font-medium">{student.rollNumber}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Contact</div>
+                  <div className="text-gray-900 font-medium">{student.phone || '-'}</div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                  student.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {student.isActive ? 'Active' : 'Inactive'}
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSelectedStudent(student)}
+                    className="text-blue-600 hover:text-blue-800"
+                    aria-label="View details"
+                  >
+                    <Eye size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleEditStudent(student)}
+                    className="text-green-600 hover:text-green-800"
+                    aria-label="Edit student"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteStudent(student)}
+                    className="text-red-600 hover:text-red-800"
+                    aria-label="Delete student"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Students Table - Desktop */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200">
           <thead className="bg-gray-50">
             <tr>
