@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Mobile-specific meta tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="DYPSN Attendance" />
+    <meta name="application-name" content="DYPSN Attendance" />
+    <meta name="theme-color" content="#3b82f6" />
+    <meta name="msapplication-TileColor" content="#3b82f6" />
+    
+    <!-- Mobile icons -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    
+    <!-- Mobile manifest -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <!-- Mobile-specific CSS -->
+    <style>
+      /* Prevent zoom on input focus for iOS */
+      input[type="text"],
+      input[type="email"],
+      input[type="password"],
+      input[type="number"],
+      input[type="tel"],
+      input[type="url"],
+      textarea,
+      select {
+        font-size: 16px !important;
+      }
+      
+      /* Safe area support */
+      :root {
+        --safe-area-inset-top: env(safe-area-inset-top);
+        --safe-area-inset-right: env(safe-area-inset-right);
+        --safe-area-inset-bottom: env(safe-area-inset-bottom);
+        --safe-area-inset-left: env(safe-area-inset-left);
+      }
+      
+      /* Mobile-specific body styles */
+      body {
+        padding-top: var(--safe-area-inset-top);
+        padding-left: var(--safe-area-inset-left);
+        padding-right: var(--safe-area-inset-right);
+        padding-bottom: var(--safe-area-inset-bottom);
+      }
+      
+      /* Mobile-specific scrollbar */
+      ::-webkit-scrollbar {
+        width: 4px;
+        height: 4px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.5);
+        border-radius: 2px;
+      }
+      
+      /* Mobile-specific selection */
+      ::selection {
+        background-color: #dbeafe;
+        color: #1e40af;
+      }
+      
+      /* Mobile-specific focus */
+      *:focus {
+        outline: none;
+      }
+      
+      *:focus-visible {
+        outline: 2px solid #3b82f6;
+        outline-offset: 2px;
+      }
+      
+      /* Mobile-specific tap highlight */
+      * {
+        -webkit-tap-highlight-color: rgba(59, 130, 246, 0.1);
+      }
+      
+      /* Mobile-specific touch feedback */
+      .touch-feedback {
+        transition: transform 0.1s ease-out;
+      }
+      
+      .touch-feedback:active {
+        transform: scale(0.98);
+      }
+      
+      /* Mobile-specific loading */
+      .loading-mobile {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      
+      @keyframes pulse {
+        0%, 100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: .5;
+        }
+      }
+      
+      /* Mobile-specific animations */
+      .animate-slide-up {
+        animation: slideUp 0.3s ease-out;
+      }
+      
+      .animate-slide-down {
+        animation: slideDown 0.3s ease-out;
+      }
+      
+      .animate-fade-in {
+        animation: fadeIn 0.2s ease-out;
+      }
+      
+      .animate-scale-in {
+        animation: scaleIn 0.2s ease-out;
+      }
+      
+      @keyframes slideUp {
+        from {
+          transform: translateY(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      
+      @keyframes slideDown {
+        from {
+          transform: translateY(-100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+      
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      
+      @keyframes scaleIn {
+        from {
+          transform: scale(0.95);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+    </style>
+    
+    <title>DYPSN Attendance & Leave System</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
