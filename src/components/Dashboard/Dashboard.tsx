@@ -3,11 +3,12 @@ import DashboardStats from './DashboardStats';
 import RecentActivity from './RecentActivity';
 import { useAuth } from '../../contexts/AuthContext';
 import { leaveService, attendanceService, userService } from '../../firebase/firestore';
-import { Calendar, Users, TrendingUp, Clock, Plus, Eye, Bell, FileText } from 'lucide-react';
+import { Calendar, Users, TrendingUp, Clock, Plus, Eye, Bell, FileText, GraduationCap } from 'lucide-react';
 import LeaveApprovalPanel from '../Leave/LeaveApprovalPanel';
 import TakeAttendancePanel from '../Attendance/TakeAttendancePanel';
 import StudentManagementPanel from '../StudentManagement/StudentManagementPanel';
 import TeacherStudentPanel from '../StudentManagement/TeacherStudentPanel';
+import TeacherManagementPanel from '../TeacherManagement/TeacherManagementPanel';
 
 interface DashboardProps {
   onPageChange?: (page: string) => void;
@@ -32,6 +33,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
   const [studentData, setStudentData] = useState<StudentData[]>([]);
   const [totalStudents, setTotalStudents] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showStudentManagement, setShowStudentManagement] = useState(false);
+  const [showTeacherManagement, setShowTeacherManagement] = useState(false);
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -207,6 +210,54 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
         <>
           <TakeAttendancePanel />
         </>
+      )}
+
+      {/* HOD Management Section */}
+      {user?.role === 'hod' && (
+        <div className="space-y-4">
+          {/* Management Toggle Buttons */}
+          <div className="flex flex-wrap gap-3 justify-center lg:justify-start">
+            <button
+              onClick={() => {
+                setShowStudentManagement(!showStudentManagement);
+                setShowTeacherManagement(false);
+              }}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 shadow-mobile flex items-center gap-2 ${
+                showStudentManagement 
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white' 
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <Users size={18} />
+              {showStudentManagement ? 'Hide Students' : 'Student Management'}
+            </button>
+            
+            <button
+              onClick={() => {
+                setShowTeacherManagement(!showTeacherManagement);
+                setShowStudentManagement(false);
+              }}
+              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-200 active:scale-95 shadow-mobile flex items-center gap-2 ${
+                showTeacherManagement 
+                  ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white' 
+                  : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <GraduationCap size={18} />
+              {showTeacherManagement ? 'Hide Teachers' : 'Teacher Management'}
+            </button>
+          </div>
+
+          {/* Student Management Panel */}
+          {showStudentManagement && (
+            <TeacherStudentPanel user={user} />
+          )}
+
+          {/* Teacher Management Panel */}
+          {showTeacherManagement && (
+            <TeacherManagementPanel />
+          )}
+        </div>
       )}
 
       {/* Dashboard Stats */}

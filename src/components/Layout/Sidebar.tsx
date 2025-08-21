@@ -13,7 +13,8 @@ import {
   PlusCircle,
   Bell,
   X,
-  LogOut
+  LogOut,
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -49,6 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentPage, onPageC
     const adminItems = [
       ...teacherItems,
       // Admin has all teacher items plus additional admin features
+      { id: 'teacher-management', label: 'Teacher Management', icon: GraduationCap },
     ];
 
     if (user?.accessLevel === 'full' || user?.role === 'hod') return adminItems;

@@ -19,6 +19,16 @@ export interface User {
   lastLogin?: string;
   loginCount?: number;
   updatedAt?: string;
+  
+  // Teacher-specific fields
+  qualification?: string;
+  specialization?: string;
+  experience?: string;
+  salary?: string;
+  address?: string;
+  emergencyContact?: string;
+  bloodGroup?: string;
+  dateOfBirth?: string;
 }
 
 export interface LeaveRequest {

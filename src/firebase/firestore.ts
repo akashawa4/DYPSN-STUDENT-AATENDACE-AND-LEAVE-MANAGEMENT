@@ -22,6 +22,7 @@ import { User, LeaveRequest, AttendanceLog, Notification } from '../types';
 // Collection names
 export const COLLECTIONS = {
   USERS: 'users',
+  TEACHERS: 'teachers',
   LEAVE_REQUESTS: 'leaveRequests',
   ATTENDANCE: 'attendance',
   NOTIFICATIONS: 'notifications',
@@ -62,6 +63,57 @@ export const userService = {
       id: doc.id,
       ...doc.data()
     })) as User[];
+  },
+
+  // TEACHERS: dedicated collection helpers
+  async createTeacher(teacher: User): Promise<void> {
+    // Write to teachers collection
+    const teacherRef = doc(db, COLLECTIONS.TEACHERS, teacher.id);
+    await setDoc(teacherRef, {
+      ...teacher,
+      role: 'teacher',
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    }, { merge: true });
+
+    // Mirror into users collection for backward compatibility/queries
+    const userRef = doc(db, COLLECTIONS.USERS, teacher.id);
+    await setDoc(userRef, {
+      ...teacher,
+      role: 'teacher',
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    }, { merge: true });
+  },
+
+  async updateTeacher(teacherId: string, updates: Partial<User>): Promise<void> {
+    const teacherRef = doc(db, COLLECTIONS.TEACHERS, teacherId);
+    await setDoc(teacherRef, { ...updates, updatedAt: serverTimestamp() }, { merge: true });
+
+    const userRef = doc(db, COLLECTIONS.USERS, teacherId);
+    await setDoc(userRef, { ...updates, updatedAt: serverTimestamp() }, { merge: true });
+  },
+
+  async deleteTeacher(teacherId: string): Promise<void> {
+    const teacherRef = doc(db, COLLECTIONS.TEACHERS, teacherId);
+    await deleteDoc(teacherRef);
+
+    const userRef = doc(db, COLLECTIONS.USERS, teacherId);
+    await deleteDoc(userRef);
+  },
+
+  async getAllTeachers(): Promise<User[]> {
+    // Prefer the teachers collection; fallback to users with role filter if empty
+    const teachersRef = collection(db, COLLECTIONS.TEACHERS);
+    const tq = query(teachersRef, orderBy('name'));
+    const tSnap = await getDocs(tq);
+    if (!tSnap.empty) {
+      return tSnap.docs.map(d => ({ id: d.id, ...d.data() })) as User[];
+    }
+    const usersRef = collection(db, COLLECTIONS.USERS);
+    const uq = query(usersRef, where('role', '==', 'teacher'), orderBy('name'));
+    const uSnap = await getDocs(uq);
+    return uSnap.docs.map(d => ({ id: d.id, ...d.data() })) as User[];
   },
 
   // Get users by role
@@ -167,6 +219,42 @@ export const userService = {
       return { id: querySnapshot.docs[0].id, ...student };
     }
     
+    return null;
+  },
+
+  // Validate teacher credentials (email and phone number)
+  async validateTeacherCredentials(email: string, phoneNumber: string): Promise<User | null> {
+    // Prefer teachers collection
+    const teachersRef = collection(db, COLLECTIONS.TEACHERS);
+    const tq = query(teachersRef, where('email', '==', email));
+    const tSnap = await getDocs(tq);
+    let teacherDoc: { id: string; data: any } | null = null;
+    if (!tSnap.empty) {
+      const doc0 = tSnap.docs[0];
+      teacherDoc = { id: doc0.id, data: doc0.data() };
+    } else {
+      // Fallback to users where role==teacher
+      const usersRef = collection(db, COLLECTIONS.USERS);
+      const uq = query(usersRef, where('email', '==', email), where('role', '==', 'teacher'));
+      const uSnap = await getDocs(uq);
+      if (uSnap.empty) return null;
+      const doc0 = uSnap.docs[0];
+      teacherDoc = { id: doc0.id, data: doc0.data() };
+    }
+
+    const teacher = teacherDoc!.data as User;
+    const teacherPhone = teacher.phone || '';
+    const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
+    const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
+
+    if (
+      normalizedTeacherPhone === normalizedInputPhone ||
+      teacherPhone === phoneNumber ||
+      teacherPhone.endsWith(phoneNumber) ||
+      phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
+    ) {
+      return { id: teacherDoc!.id, ...teacher };
+    }
     return null;
   },
 

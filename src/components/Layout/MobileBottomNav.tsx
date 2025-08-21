@@ -7,7 +7,8 @@ import {
   User,
   PlusCircle,
   CheckCircle,
-  Users
+  Users,
+  GraduationCap
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -39,6 +40,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentPage, onPageCh
     const adminItems = [
       { id: 'dashboard', label: 'Home', icon: Home },
       { id: 'student-management', label: 'Students', icon: Users },
+      { id: 'teacher-management', label: 'Teachers', icon: GraduationCap },
       { id: 'leave-requests', label: 'Approve', icon: CheckCircle },
       { id: 'reports', label: 'Reports', icon: Calendar },
       { id: 'profile', label: 'Profile', icon: User },

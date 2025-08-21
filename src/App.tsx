@@ -13,6 +13,7 @@ import ESLBiometricIntegration from './components/Attendance/ESLBiometricIntegra
 import Notifications from './components/Notifications/Notifications';
 import StudentManagementPanel from './components/StudentManagement/StudentManagementPanel';
 import TeacherStudentPanel from './components/StudentManagement/TeacherStudentPanel';
+import TeacherManagementPanel from './components/TeacherManagement/TeacherManagementPanel';
 import { Upload, BarChart3, Users, Calendar, FileText } from 'lucide-react';
 import StudentProfile from './components/StudentProfile';
 import TakeAttendancePanel from './components/Attendance/TakeAttendancePanel';
@@ -405,6 +406,8 @@ const AppContent: React.FC = () => {
         ) : (
           <StudentManagementPanel user={user} />
         );
+      case 'teacher-management':
+        return <TeacherManagementPanel />;
       case 'take-attendance':
         return <TakeAttendancePanel addNotification={addNotification} />;
       case 'settings':
