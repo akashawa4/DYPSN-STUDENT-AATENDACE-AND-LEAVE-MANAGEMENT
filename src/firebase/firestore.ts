@@ -116,6 +116,29 @@ export const userService = {
     return uSnap.docs.map(d => ({ id: d.id, ...d.data() })) as User[];
   },
 
+  // Bulk import teachers (writes to teachers and users collections)
+  async bulkImportTeachers(teachers: User[]): Promise<void> {
+    const batch = writeBatch(db);
+    const now = serverTimestamp();
+    for (const teacher of teachers) {
+      const teacherId = teacher.id || (teacher.email || `teacher_${Date.now()}`);
+      const base = {
+        ...teacher,
+        id: teacherId,
+        role: 'teacher',
+        accessLevel: teacher.accessLevel || 'approver',
+        isActive: teacher.isActive !== false,
+        updatedAt: now,
+        createdAt: now
+      } as any;
+      const tRef = doc(db, COLLECTIONS.TEACHERS, teacherId);
+      batch.set(tRef, base, { merge: true });
+      const uRef = doc(db, COLLECTIONS.USERS, teacherId);
+      batch.set(uRef, base, { merge: true });
+    }
+    await batch.commit();
+  },
+
   // Get users by role
   async getUsersByRole(role: string): Promise<User[]> {
     const usersRef = collection(db, COLLECTIONS.USERS);
@@ -670,7 +693,14 @@ export const attendanceService = {
       dateString = (date as any).toDate().toISOString().split('T')[0];
     }
     const docId = `${rollNumber || userId}_${dateString}`;
-    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/records`;
+    
+    // Extract year, month, and date from dateString
+    const dateObj = new Date(dateString);
+    const attendanceYear = dateObj.getFullYear().toString();
+    const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // 01, 02, etc.
+    const attendanceDate = dateObj.getDate().toString().padStart(2, '0'); // 01, 02, etc.
+    
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
     const attendanceRef = doc(collection(db, collectionPath), docId);
     await setDoc(attendanceRef, {
       ...attendanceData,
@@ -851,26 +881,292 @@ export const attendanceService = {
     startDate: Date,
     endDate: Date
   ): Promise<AttendanceLog[]> {
-    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/records
-    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/records`;
-    const recordsRef = collection(db, collectionPath);
-    const q = query(
-      recordsRef,
-      where('rollNumber', '==', rollNumber),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate)
-    );
-    const querySnapshot = await getDocs(q);
-    const records = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as AttendanceLog[];
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/date/record
+    // We need to query across multiple date collections
+    const attendanceRecords: AttendanceLog[] = [];
+    
+    // Generate date range and query each date collection
+    const currentDate = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    
+    while (currentDate <= endDateObj) {
+      const dateString = currentDate.toISOString().split('T')[0];
+      const dateObj = new Date(dateString);
+      const attendanceYear = dateObj.getFullYear().toString();
+      const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+      const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+      
+      const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+      
+      try {
+        const recordsRef = collection(db, collectionPath);
+        const q = query(recordsRef, where('rollNumber', '==', rollNumber));
+        const querySnapshot = await getDocs(q);
+        
+        const records = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as AttendanceLog[];
+        
+        attendanceRecords.push(...records);
+      } catch (error) {
+        console.log(`No attendance data for date: ${dateString}`);
+      }
+      
+      // Move to next date
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
     // Sort by date ascending
-    return records.sort((a, b) => {
+    return attendanceRecords.sort((a, b) => {
       const aDate = a.date instanceof Date ? a.date : (a.date as any)?.toDate?.() || new Date(a.date || 0);
       const bDate = b.date instanceof Date ? b.date : (b.date as any)?.toDate?.() || new Date(b.date || 0);
       return aDate.getTime() - bDate.getTime();
     });
+  },
+
+  // Get attendance for a specific date from organized structure
+  async getAttendanceByDate(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year/month/date
+    const dateObj = new Date(date);
+    const attendanceYear = dateObj.getFullYear().toString();
+    const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+    
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+    const recordsRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(recordsRef);
+      const records = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AttendanceLog[];
+      
+      return records;
+    } catch (error) {
+      console.log(`No attendance data for date: ${date}`);
+      return [];
+    }
+  },
+
+  // Get all attendance for a specific subject on a specific date
+  async getAllAttendanceForSubjectAndDate(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year/month/date
+    const dateObj = new Date(date);
+    const attendanceYear = dateObj.getFullYear().toString();
+    const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+    
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+    const recordsRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(recordsRef);
+      const records = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AttendanceLog[];
+      
+      return records;
+    } catch (error) {
+      console.log(`No attendance data for subject ${subject} on date: ${date}`);
+      return [];
+    }
+  },
+
+  // Get all attendance for a specific subject in a specific month
+  async getAttendanceByMonth(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    month: string, // Format: "01", "02", etc.
+    yearForMonth: string // The year for the month (e.g., "2025")
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year/month
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${yearForMonth}/${month}`;
+    const monthRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(monthRef);
+      const allRecords: AttendanceLog[] = [];
+      
+      // Iterate through all date collections in the month
+      for (const dateDoc of querySnapshot.docs) {
+        const dateCollectionPath = `${collectionPath}/${dateDoc.id}`;
+        const dateRef = collection(db, dateCollectionPath);
+        const dateQuerySnapshot = await getDocs(dateRef);
+        
+        const records = dateQuerySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as AttendanceLog[];
+        
+        allRecords.push(...records);
+      }
+      
+      return allRecords;
+    } catch (error) {
+      console.log(`No attendance data for month: ${month}/${yearForMonth}`);
+      return [];
+    }
+  },
+
+  // Get all attendance for a specific subject in a specific year
+  async getAttendanceByYear(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    yearForYear: string // The year for the year (e.g., "2025")
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${yearForYear}`;
+    const yearRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(yearRef);
+      const allRecords: AttendanceLog[] = [];
+      
+      // Iterate through all month collections in the year
+      for (const monthDoc of querySnapshot.docs) {
+        const monthCollectionPath = `${collectionPath}/${monthDoc.id}`;
+        const monthRef = collection(db, monthCollectionPath);
+        const monthQuerySnapshot = await getDocs(monthRef);
+        
+        // Iterate through all date collections in the month
+        for (const dateDoc of monthQuerySnapshot.docs) {
+          const dateCollectionPath = `${monthCollectionPath}/${dateDoc.id}`;
+          const dateRef = collection(db, dateCollectionPath);
+          const dateQuerySnapshot = await getDocs(dateRef);
+          
+          const records = dateQuerySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as AttendanceLog[];
+          
+          allRecords.push(...records);
+        }
+      }
+      
+      return allRecords;
+    } catch (error) {
+      console.log(`No attendance data for year: ${yearForYear}`);
+      return [];
+    }
+  },
+
+  // Get all attendance for a specific subject in a specific month (optimized for exports)
+  async getAttendanceByMonthOptimized(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    month: string, // Format: "01", "02", etc.
+    yearForMonth: string // The year for the month (e.g., "2025")
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year/month
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${yearForMonth}/${month}`;
+    const monthRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(monthRef);
+      const allRecords: AttendanceLog[] = [];
+      
+      // Iterate through all date collections in the month
+      for (const dateDoc of querySnapshot.docs) {
+        const dateCollectionPath = `${collectionPath}/${dateDoc.id}`;
+        const dateRef = collection(db, dateCollectionPath);
+        const dateQuerySnapshot = await getDocs(dateRef);
+        
+        const records = dateQuerySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as AttendanceLog[];
+        
+        allRecords.push(...records);
+      }
+      
+      return allRecords;
+    } catch (error) {
+      console.log(`No attendance data for month: ${month}/${yearForMonth}`);
+      return [];
+    }
+  },
+
+  // Get all attendance for a specific date (optimized for exports)
+  async getAttendanceByDateOptimized(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year/month/date
+    const dateObj = new Date(date);
+    const attendanceYear = dateObj.getFullYear().toString();
+    const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+    
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+    const recordsRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(recordsRef);
+      const records = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AttendanceLog[];
+      
+      return records;
+    } catch (error) {
+      console.log(`No attendance data for date: ${date}`);
+      return [];
+    }
+  },
+
+  // Get all students' attendance for a specific date and subject (for daily reports)
+  async getAllStudentsAttendanceForDate(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<AttendanceLog[]> {
+    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/year/month/date
+    const dateObj = new Date(date);
+    const attendanceYear = dateObj.getFullYear().toString();
+    const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+    
+    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+    const recordsRef = collection(db, collectionPath);
+    
+    try {
+      const querySnapshot = await getDocs(recordsRef);
+      const records = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AttendanceLog[];
+      
+      return records;
+    } catch (error) {
+      console.log(`No attendance data for date: ${date}`);
+      return [];
+    }
   }
 };
 

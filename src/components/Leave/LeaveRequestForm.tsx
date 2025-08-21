@@ -5,6 +5,21 @@ import { leaveService } from '../../firebase/firestore';
 
 const LeaveRequestForm: React.FC = () => {
   const { user } = useAuth();
+  
+  // Security check: Only students can apply for leave
+  if (!user || (user.role !== 'student')) {
+    return (
+      <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-md p-6 border border-gray-200 mt-8">
+        <div className="text-center">
+          <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600">Only students can apply for leave requests.</p>
+          <p className="text-sm text-gray-500 mt-2">Teachers and HODs manage leave approvals instead.</p>
+        </div>
+      </div>
+    );
+  }
+  
   const [formData, setFormData] = useState({
     leaveType: '',
     fromDate: '',

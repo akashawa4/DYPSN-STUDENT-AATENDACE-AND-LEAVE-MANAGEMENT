@@ -355,7 +355,12 @@ const AppContent: React.FC = () => {
       case 'dashboard':
         return <Dashboard onPageChange={setCurrentPage} />;
       case 'apply-leave':
-        return <LeaveRequestForm />;
+        // Only students can apply for leave
+        if (user.role === 'student') {
+          return <LeaveRequestForm />;
+        }
+        // Redirect teachers and HODs to dashboard
+        return <Dashboard onPageChange={setCurrentPage} />;
       case 'my-leaves':
         // Show Student Leaves for teacher and HOD
         if (user.role === 'teacher' || user.role === 'hod') {

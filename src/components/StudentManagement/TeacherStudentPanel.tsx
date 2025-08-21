@@ -225,20 +225,69 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
           let studentAttendance: AttendanceLog[] = [];
           
           if (type === 'subject') {
-            // For subject-wise export, we need to filter by subject
-            const allAttendance = await attendanceService.getAttendanceByUserAndDateRange(
-              student.id,
+            // For subject-wise export, use the new organized structure
+            studentAttendance = await attendanceService.getOrganizedAttendanceByUserAndDateRange(
+              student.rollNumber || student.id,
+              selectedYear,
+              selectedSem,
+              selectedDiv,
+              selectedSubject,
               startDateObj,
               endDateObj
             );
-            studentAttendance = allAttendance.filter(att => att.subject === selectedSubject);
+          } else if (type === 'monthly') {
+            // For monthly exports, use optimized month function
+            const [year, month] = selectedMonth.split('-');
+            const allSubjects = [
+              'Mathematics', 'Physics', 'Chemistry', 'Computer Science', 'English', 
+              'Engineering Drawing', 'Programming', 'Data Structures', 'Database Management', 
+              'Web Development', 'Software Engineering'
+            ];
+            
+            for (const subject of allSubjects) {
+              try {
+                const subjectAttendance = await attendanceService.getAttendanceByMonthOptimized(
+                  selectedYear,
+                  selectedSem,
+                  selectedDiv,
+                  subject,
+                  month.padStart(2, '0'),
+                  year
+                );
+                // Filter by date range for the specific month
+                const filteredAttendance = subjectAttendance.filter(att => {
+                  const attDate = new Date(att.date);
+                  return attDate >= startDateObj && attDate <= endDateObj;
+                });
+                studentAttendance.push(...filteredAttendance);
+              } catch (error) {
+                console.log(`No attendance data for subject ${subject}`);
+              }
+            }
           } else {
-            // For monthly and custom exports, get all attendance data
-            studentAttendance = await attendanceService.getAttendanceByUserAndDateRange(
-              student.id,
-              startDateObj,
-              endDateObj
-            );
+            // For custom date range exports, get all attendance data using new structure
+            const allSubjects = [
+              'Mathematics', 'Physics', 'Chemistry', 'Computer Science', 'English', 
+              'Engineering Drawing', 'Programming', 'Data Structures', 'Database Management', 
+              'Web Development', 'Software Engineering'
+            ];
+            
+            for (const subject of allSubjects) {
+              try {
+                const subjectAttendance = await attendanceService.getOrganizedAttendanceByUserAndDateRange(
+                  student.rollNumber || student.id,
+                  selectedYear,
+                  selectedSem,
+                  selectedDiv,
+                  subject,
+                  startDateObj,
+                  endDateObj
+                );
+                studentAttendance.push(...subjectAttendance);
+              } catch (error) {
+                console.log(`No attendance data for subject ${subject}`);
+              }
+            }
           }
 
           if (type === 'subject') {

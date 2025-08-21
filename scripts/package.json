@@ -1,0 +1,24 @@
+{
+  "name": "cse-attendance-scripts",
+  "version": "1.0.0",
+  "description": "Scripts for CSE Attendance and Leave System",
+  "main": "index.js",
+  "scripts": {
+    "create-teacher-auth": "node createTeacherAuthUsers.js",
+    "create-student-auth": "node createStudentAuthUsers.js",
+    "delete-demo-data": "node deleteDemoUserData.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "firebase",
+    "authentication",
+    "firestore",
+    "cse",
+    "attendance"
+  ],
+  "author": "CSE Attendance System",
+  "license": "MIT"
+}

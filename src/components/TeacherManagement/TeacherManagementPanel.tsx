@@ -17,9 +17,12 @@ import {
   Clock,
   DollarSign,
   Heart,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Upload
 } from 'lucide-react';
 import { userService } from '../../firebase/firestore';
+import * as XLSX from 'xlsx';
 import { User as UserType } from '../../types';
 
 interface TeacherFormData {
@@ -54,6 +57,7 @@ const TeacherManagementPanel: React.FC = () => {
   
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTeacher, setSelectedTeacher] = useState<UserType | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const [formData, setFormData] = useState<TeacherFormData>({
     name: '',
@@ -215,6 +219,325 @@ const TeacherManagementPanel: React.FC = () => {
     });
   };
 
+  const downloadTemplate = () => {
+    // Create a more structured CSV with proper formatting
+    const headers = [
+      'Name',
+      'Email', 
+      'Phone',
+      'Department',
+      'Designation',
+      'Qualification',
+      'Specialization',
+      'Experience (Years)',
+      'Joining Date (YYYY-MM-DD)',
+      'Address',
+      'Emergency Contact',
+      'Blood Group',
+      'Date of Birth (YYYY-MM-DD)',
+      'Gender',
+      'Is Active (true/false)'
+    ];
+    
+    const sampleData = [
+      {
+        name: 'Dr. Aakash Patil',
+        email: 'aakash.patil@college.edu',
+        phone: '+91 9876543210',
+        department: 'CSE',
+        designation: 'Assistant Professor',
+        qualification: 'Ph.D.',
+        specialization: 'Machine Learning',
+        experience: '6',
+        joiningDate: '2020-07-01',
+        address: 'Pune, Maharashtra',
+        emergencyContact: '+91 9123456780',
+        bloodGroup: 'O+',
+        dateOfBirth: '1985-05-12',
+        gender: 'Male',
+        isActive: 'true'
+      },
+      {
+        name: 'Prof. Neha Shah',
+        email: 'neha.shah@college.edu',
+        phone: '+91 9988776655',
+        department: 'CSE',
+        designation: 'Associate Professor',
+        qualification: 'M.Tech',
+        specialization: 'Database Systems',
+        experience: '10',
+        joiningDate: '2016-08-15',
+        address: 'Mumbai, Maharashtra',
+        emergencyContact: '+91 9876501234',
+        bloodGroup: 'AB+',
+        dateOfBirth: '1982-03-22',
+        gender: 'Female',
+        isActive: 'true'
+      },
+      {
+        name: 'Dr. Rajesh Kumar',
+        email: 'rajesh.kumar@college.edu',
+        phone: '+91 9876543211',
+        department: 'CSE',
+        designation: 'Professor',
+        qualification: 'Ph.D.',
+        specialization: 'Artificial Intelligence',
+        experience: '15',
+        joiningDate: '2010-06-01',
+        address: 'Delhi, India',
+        emergencyContact: '+91 9123456781',
+        bloodGroup: 'B+',
+        dateOfBirth: '1978-12-15',
+        gender: 'Male',
+        isActive: 'true'
+      }
+    ];
+
+    // Convert to CSV format with proper escaping
+    const csvContent = [
+      headers.join(','),
+      ...sampleData.map(row => [
+        `"${row.name}"`,
+        `"${row.email}"`,
+        `"${row.phone}"`,
+        `"${row.department}"`,
+        `"${row.designation}"`,
+        `"${row.qualification}"`,
+        `"${row.specialization}"`,
+        `"${row.experience}"`,
+        `"${row.joiningDate}"`,
+        `"${row.address}"`,
+        `"${row.emergencyContact}"`,
+        `"${row.bloodGroup}"`,
+        `"${row.dateOfBirth}"`,
+        `"${row.gender}"`,
+        `"${row.isActive}"`
+      ].join(','))
+    ].join('\n');
+
+    // Add BOM for proper Excel encoding
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'teacher_import_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadExcelTemplate = () => {
+    console.log('Downloading Excel template...');
+    // Create Excel template with proper formatting
+    const headers = [
+      'Name',
+      'Email', 
+      'Phone',
+      'Department',
+      'Designation',
+      'Qualification',
+      'Specialization',
+      'Experience (Years)',
+      'Joining Date (YYYY-MM-DD)',
+      'Address',
+      'Emergency Contact',
+      'Blood Group',
+      'Date of Birth (YYYY-MM-DD)',
+      'Gender',
+      'Is Active (true/false)'
+    ];
+    
+    const sampleData = [
+      {
+        name: 'Dr. Aakash Patil',
+        email: 'aakash.patil@college.edu',
+        phone: '+91 9876543210',
+        department: 'CSE',
+        designation: 'Assistant Professor',
+        qualification: 'Ph.D.',
+        specialization: 'Machine Learning',
+        experience: '6',
+        joiningDate: '2020-07-01',
+        address: 'Pune, Maharashtra',
+        emergencyContact: '+91 9123456780',
+        bloodGroup: 'O+',
+        dateOfBirth: '1985-05-12',
+        gender: 'Male',
+        isActive: 'true'
+      },
+      {
+        name: 'Prof. Neha Shah',
+        email: 'neha.shah@college.edu',
+        phone: '+91 9988776655',
+        department: 'CSE',
+        designation: 'Associate Professor',
+        qualification: 'M.Tech',
+        specialization: 'Database Systems',
+        experience: '10',
+        joiningDate: '2016-08-15',
+        address: 'Mumbai, Maharashtra',
+        emergencyContact: '+91 9876501234',
+        bloodGroup: 'AB+',
+        dateOfBirth: '1982-03-22',
+        gender: 'Female',
+        isActive: 'true'
+      },
+      {
+        name: 'Dr. Rajesh Kumar',
+        email: 'rajesh.kumar@college.edu',
+        phone: '+91 9876543211',
+        department: 'CSE',
+        designation: 'Professor',
+        qualification: 'Ph.D.',
+        specialization: 'Artificial Intelligence',
+        experience: '15',
+        joiningDate: '2010-06-01',
+        address: 'Delhi, India',
+        emergencyContact: '+91 9123456781',
+        bloodGroup: 'B+',
+        dateOfBirth: '1978-12-15',
+        gender: 'Male',
+        isActive: 'true'
+      }
+    ];
+
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    
+    // Set column widths for better readability
+    const columnWidths = [
+      { wch: 25 }, // Name
+      { wch: 30 }, // Email
+      { wch: 18 }, // Phone
+      { wch: 12 }, // Department
+      { wch: 20 }, // Designation
+      { wch: 15 }, // Qualification
+      { wch: 20 }, // Specialization
+      { wch: 18 }, // Experience
+      { wch: 20 }, // Joining Date
+      { wch: 25 }, // Address
+      { wch: 18 }, // Emergency Contact
+      { wch: 12 }, // Blood Group
+      { wch: 20 }, // Date of Birth
+      { wch: 10 }, // Gender
+      { wch: 15 }  // Is Active
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    // Add the worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Teacher Template');
+    
+    // Generate and download the file
+    XLSX.writeFile(workbook, 'teacher_import_template.xlsx');
+  };
+
+  const handleImportTeachers = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsImporting(true);
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<any>(sheet, { defval: '' });
+
+      // Handle both old and new CSV formats with flexible header mapping
+      const headerMapping: { [key: string]: string } = {
+        'name': 'name',
+        'Name': 'name',
+        'email': 'email',
+        'Email': 'email',
+        'phone': 'phone',
+        'Phone': 'phone',
+        'department': 'department',
+        'Department': 'department',
+        'designation': 'designation',
+        'Designation': 'designation',
+        'qualification': 'qualification',
+        'Qualification': 'qualification',
+        'specialization': 'specialization',
+        'Specialization': 'specialization',
+        'experience': 'experience',
+        'Experience (Years)': 'experience',
+        'joiningDate': 'joiningDate',
+        'Joining Date (YYYY-MM-DD)': 'joiningDate',
+        'address': 'address',
+        'Address': 'address',
+        'emergencyContact': 'emergencyContact',
+        'Emergency Contact': 'emergencyContact',
+        'bloodGroup': 'bloodGroup',
+        'Blood Group': 'bloodGroup',
+        'dateOfBirth': 'dateOfBirth',
+        'Date of Birth (YYYY-MM-DD)': 'dateOfBirth',
+        'gender': 'gender',
+        'Gender': 'gender',
+        'isActive': 'isActive',
+        'Is Active (true/false)': 'isActive'
+      };
+
+      const teachers: UserType[] = rows.map((row: any, idx: number) => {
+        const id = (row.id || row.email || `teacher_${Date.now()}_${idx}`).toString();
+        
+        // Map values using the header mapping
+        const getValue = (key: string) => {
+          for (const [header, mappedKey] of Object.entries(headerMapping)) {
+            if (header === mappedKey) {
+              return row[key] || '';
+            }
+          }
+          // Try direct mapping first
+          if (row[key] !== undefined) return row[key];
+          // Try case-insensitive mapping
+          const lowerKey = key.toLowerCase();
+          for (const [header, mappedKey] of Object.entries(headerMapping)) {
+            if (header.toLowerCase() === lowerKey) {
+              return row[header] || '';
+            }
+          }
+          return '';
+        };
+
+        return {
+          id,
+          name: getValue('name') || '',
+          email: getValue('email') || '',
+          phone: getValue('phone')?.toString?.() || '',
+          role: 'teacher',
+          department: getValue('department') || 'CSE',
+          accessLevel: 'approver',
+          isActive: String(getValue('isActive') || 'true').toLowerCase() !== 'false',
+          designation: getValue('designation') || 'Assistant Professor',
+          qualification: getValue('qualification') || '',
+          specialization: getValue('specialization') || '',
+          experience: getValue('experience')?.toString?.() || '',
+          joiningDate: getValue('joiningDate') || '',
+          address: getValue('address') || '',
+          emergencyContact: getValue('emergencyContact')?.toString?.() || '',
+          bloodGroup: getValue('bloodGroup') || '',
+          dateOfBirth: getValue('dateOfBirth') || '',
+          gender: getValue('gender') || '',
+        } as UserType;
+      }).filter(t => t.email);
+
+      if (teachers.length === 0) {
+        console.warn('No valid teacher rows found in sheet');
+        return;
+      }
+
+      await userService.bulkImportTeachers(teachers);
+      await loadTeachers();
+    } catch (err) {
+      console.error('Failed to import teachers:', err);
+    } finally {
+      setIsImporting(false);
+      e.target.value = '';
+    }
+  };
+
   const filteredTeachers = teachers.filter(teacher => {
     const matchesSearch = teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -245,7 +568,8 @@ const TeacherManagementPanel: React.FC = () => {
           <h2 className="text-lg lg:text-2xl font-bold text-gray-900 mb-2">Teacher Management</h2>
           <p className="text-sm lg:text-base text-gray-600">Manage faculty members and their information</p>
         </div>
-        <button
+        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+          <button
           onClick={() => {
             setShowForm(true);
             setEditingTeacher(null);
@@ -256,6 +580,19 @@ const TeacherManagementPanel: React.FC = () => {
           <Plus className="w-5 h-5" />
           Add Teacher
         </button>
+                  <button
+          onClick={() => downloadExcelTemplate()}
+          className="btn-mobile bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-sm"
+        >
+          <Download className="w-4 h-4" />
+          Excel Template
+        </button>
+          <label className="btn-mobile bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 cursor-pointer font-medium">
+            <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportTeachers} disabled={isImporting} />
+            <Upload className="w-4 h-4" />
+            {isImporting ? 'Importing…' : 'Import Excel'}
+          </label>
+        </div>
       </div>
 
       {/* Search and Filters - Mobile Optimized */}

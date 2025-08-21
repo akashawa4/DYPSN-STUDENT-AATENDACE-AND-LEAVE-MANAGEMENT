@@ -4,7 +4,7 @@ import RecentActivity from './RecentActivity';
 import { useAuth } from '../../contexts/AuthContext';
 import { leaveService, attendanceService, userService } from '../../firebase/firestore';
 import { Calendar, Users, TrendingUp, Clock, Plus, Eye, Bell, FileText, GraduationCap } from 'lucide-react';
-import LeaveApprovalPanel from '../Leave/LeaveApprovalPanel';
+
 import TakeAttendancePanel from '../Attendance/TakeAttendancePanel';
 import StudentManagementPanel from '../StudentManagement/StudentManagementPanel';
 import TeacherStudentPanel from '../StudentManagement/TeacherStudentPanel';
@@ -95,34 +95,50 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
               div: u.div
             })));
             
+            // Filter for CSE students with more flexible matching
             const cseStudents = allStudents.filter(student => {
-              console.log('Checking student:', student.name, 'Department:', student.department, 'Year:', student.year, 'Role:', student.role);
-              return student.role === 'student' && 
-                (student.department === 'CSE' || student.department === 'cse') &&
-                student.year && ['2', '3', '4', '2nd', '3rd', '4th', 'Second', 'Third', 'Fourth'].some(year => 
-                  student.year?.toString().toLowerCase().includes(year.toLowerCase())
-                );
+              const isStudent = student.role === 'student';
+              const isCSE = student.department && 
+                (student.department === 'CSE' || 
+                 student.department === 'cse' || 
+                 student.department === 'Computer Science' ||
+                 student.department === 'computer science');
+              
+              // More flexible year matching
+              const year = student.year?.toString().toLowerCase();
+              const isValidYear = year && (
+                year === '2' || year === '3' || year === '4' ||
+                year.includes('2') || year.includes('3') || year.includes('4') ||
+                year.includes('2nd') || year.includes('3rd') || year.includes('4th') ||
+                year.includes('second') || year.includes('third') || year.includes('fourth')
+              );
+              
+              console.log('Checking student:', student.name, 'Department:', student.department, 'Year:', student.year, 'Role:', student.role, 'Valid:', { isStudent, isCSE, isValidYear });
+              
+              return isStudent && isCSE && isValidYear;
             });
-            console.log('CSE students filtered:', cseStudents.length);
-            console.log('Sample CSE student:', cseStudents[0]);
             
-            // If no CSE students found, show all students for debugging
+            console.log('CSE students filtered:', cseStudents.length);
+            if (cseStudents.length > 0) {
+              console.log('Sample CSE student:', cseStudents[0]);
+            }
+            
+            // If no CSE students found, try to find any students with year/sem/div data
+            let studentsToUse = cseStudents;
             if (cseStudents.length === 0) {
-              console.log('No CSE students found, showing all students for debugging:');
-              const allStudentsWithDetails = allStudents.map(s => ({
-                name: s.name,
-                department: s.department,
-                year: s.year,
-                sem: s.sem,
-                div: s.div,
-                role: s.role
-              }));
-              console.log('All students details:', allStudentsWithDetails);
+              console.log('No CSE students found, looking for any students with year/sem/div data...');
+              const studentsWithYearData = allStudents.filter(s => 
+                s.role === 'student' && s.year && s.sem && s.div
+              );
+              console.log('Students with year data:', studentsWithYearData.length);
+              if (studentsWithYearData.length > 0) {
+                studentsToUse = studentsWithYearData;
+                console.log('Using students with year data instead of CSE filter');
+              }
             }
             
             // Group students by year, semester, and division
-            const studentsToUse = cseStudents.length > 0 ? cseStudents : allStudents;
-            console.log(`Using ${studentsToUse.length === cseStudents.length ? 'CSE students' : 'all students'} for display`);
+            console.log(`Using ${studentsToUse.length} students for display`);
             const groupedData: { [key: string]: any[] } = {};
             studentsToUse.forEach(student => {
               if (student.year && student.sem && student.div) {
@@ -159,8 +175,22 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
             setTotalStudents(studentsToUse.length);
             console.log('Final student data set:', studentDataArray);
             console.log('Total students:', studentsToUse.length);
+            
+            // Additional debugging to ensure state is set correctly
+            console.log('State values being set:');
+            console.log('- studentData:', studentDataArray);
+            console.log('- totalStudents:', studentsToUse.length);
+            
+            // Verify the data structure
+            if (studentDataArray.length > 0) {
+              console.log('First student data item:', studentDataArray[0]);
+              console.log('Students in first group:', studentDataArray[0].students);
+            }
           } catch (error) {
             console.error('Error loading student data:', error);
+            // Set default values to prevent showing wrong data
+            setStudentData([]);
+            setTotalStudents(0);
           }
         }
       } catch (error) {
@@ -272,8 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
       {/* Admin Section */}
       {(user?.accessLevel === 'full' || user?.role === 'hod') ? (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <LeaveApprovalPanel />
+          <div className="grid grid-cols-1 gap-6">
             <RecentActivity />
           </div>
         </>

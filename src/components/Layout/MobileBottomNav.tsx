@@ -42,7 +42,6 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentPage, onPageCh
       { id: 'student-management', label: 'Students', icon: Users },
       { id: 'teacher-management', label: 'Teachers', icon: GraduationCap },
       { id: 'leave-requests', label: 'Approve', icon: CheckCircle },
-      { id: 'reports', label: 'Reports', icon: Calendar },
       { id: 'profile', label: 'Profile', icon: User },
     ];
 

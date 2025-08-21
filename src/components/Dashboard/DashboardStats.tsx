@@ -63,6 +63,19 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
 
+  // Debug logging for props
+  console.log('DashboardStats props:', {
+    dashboardData,
+    loading,
+    studentData,
+    totalStudents,
+    userRole,
+    actualUserRole: user?.role,
+    accessLevel: user?.accessLevel,
+    isHOD: user?.role === 'hod',
+    isTeacher: user?.role === 'teacher'
+  });
+
   // Load user's leave requests for stats
   useEffect(() => {
     const loadLeaveRequests = async () => {
@@ -83,6 +96,13 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
   // Calculate stats from real data
   const calculateStats = () => {
     if (!user) return [];
+    
+    console.log('calculateStats called with user:', {
+      role: user.role,
+      accessLevel: user.accessLevel,
+      isHOD: user.role === 'hod',
+      isTeacher: user.role === 'teacher'
+    });
     
     if (user.role === 'student' && dashboardData) {
       // Student stats with real data
@@ -130,8 +150,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     const approvedRequests = leaveRequests.filter(req => req.status === 'approved').length;
     const totalRequests = leaveRequests.length;
 
-    if (user.accessLevel === 'full') {
+    // Only show admin stats for users with full access who are NOT HODs
+    if (user.accessLevel === 'full' && user.role !== 'hod') {
       // Admin stats (unchanged)
+      console.log('Showing admin stats for user with full access (not HOD)');
       return [
         {
           id: 'staff',
@@ -174,6 +196,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
 
     // Teacher/HOD stats with real student data
     if (studentData && totalStudents !== undefined) {
+      console.log('Showing Teacher/HOD stats with real student data');
       console.log('Calculating stats with student data:', studentData);
       console.log('Total students:', totalStudents);
       
@@ -234,43 +257,59 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
       ];
     }
 
-    // Fallback Teacher/HOD stats
+    // Fallback Teacher/HOD stats - only show when no student data is available
+    if (user.role === 'teacher' || user.role === 'hod') {
+      console.log('Showing fallback Teacher/HOD stats (no student data available)');
       return [
+        {
+          id: 'students',
+          title: 'Total Students',
+          value: '0',
+          change: 'No data available',
+          changeType: 'neutral' as const,
+          icon: User,
+          color: 'gray'
+        },
+        {
+          id: 'year2',
+          title: '2nd Year',
+          value: '0',
+          change: 'Students',
+          changeType: 'neutral' as const,
+          icon: Users,
+          color: 'gray'
+        },
+        {
+          id: 'year3',
+          title: '3rd Year',
+          value: '0',
+          change: 'Students',
+          changeType: 'neutral' as const,
+          icon: Users,
+          color: 'purple'
+        },
+        {
+          id: 'year4',
+          title: '4th Year',
+          value: '0',
+          change: 'Students',
+          changeType: 'neutral' as const,
+          icon: Users,
+          color: 'indigo'
+        }
+      ];
+    }
+    
+    // Default fallback for other roles
+    return [
       {
         id: 'students',
         title: 'Total Students',
-        value: '45',
-        change: 'In your class',
-        changeType: 'positive' as const,
+        value: '0',
+        change: 'No data available',
+        changeType: 'neutral' as const,
         icon: User,
-        color: 'blue'
-      },
-        {
-          id: 'attendance',
-        title: 'Today\'s Attendance',
-        value: '42/45',
-        change: '93% present',
-        changeType: 'positive' as const,
-          icon: CheckCircle,
-          color: 'green'
-        },
-        {
-          id: 'leaves',
-        title: 'Pending Leaves',
-          value: pendingRequests.toString(),
-        change: 'Requires review',
-          changeType: 'warning' as const,
-          icon: AlertCircle,
-          color: 'amber'
-      },
-      {
-        id: 'approvals',
-        title: 'Approved Today',
-        value: approvedRequests.toString(),
-        change: 'This session',
-        changeType: 'positive' as const,
-        icon: CheckCircle,
-        color: 'green'
+        color: 'gray'
       }
     ];
   };
@@ -513,7 +552,9 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
       blue: 'bg-blue-50 text-blue-600',
       green: 'bg-green-50 text-green-600',
       amber: 'bg-amber-50 text-amber-600',
-      purple: 'bg-purple-50 text-purple-600'
+      purple: 'bg-purple-50 text-purple-600',
+      indigo: 'bg-indigo-50 text-indigo-600',
+      gray: 'bg-gray-50 text-gray-600'
     };
     return colorMap[color as keyof typeof colorMap] || colorMap.blue;
   };
@@ -827,7 +868,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
-          const isClickable = user?.accessLevel !== 'full';
+                     const isClickable = false; // Make all cards non-clickable
           
           return (
             <div 
@@ -849,11 +890,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
                   <Icon className="w-5 h-5 lg:w-6 lg:h-6" />
                 </div>
               </div>
-              {isClickable && (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <p className="text-xs text-blue-600 font-medium">Tap for details →</p>
-                </div>
-              )}
+                              {/* Removed tap for details text */}
             </div>
           );
         })}
