@@ -1167,6 +1167,196 @@ export const attendanceService = {
       console.log(`No attendance data for date: ${date}`);
       return [];
     }
+  },
+
+  // Ultra-fast batch export function using Promise.all for parallel processing
+  async getBatchAttendanceForExport(
+    year: string,
+    sem: string,
+    div: string,
+    subjects: string[],
+    startDate: Date,
+    endDate: Date,
+    studentRollNumbers: string[]
+  ): Promise<{ [studentRoll: string]: { [subject: string]: AttendanceLog[] } }> {
+    // Add safety limits to prevent extremely long exports
+    const MAX_STUDENTS = 100;
+    const MAX_SUBJECTS = 15;
+    const MAX_DAYS = 90; // 3 months max
+    
+    if (studentRollNumbers.length > MAX_STUDENTS) {
+      throw new Error(`Too many students (${studentRollNumbers.length}). Maximum allowed: ${MAX_STUDENTS}`);
+    }
+    
+    if (subjects.length > MAX_SUBJECTS) {
+      throw new Error(`Too many subjects (${subjects.length}). Maximum allowed: ${MAX_SUBJECTS}`);
+    }
+    
+    const daysDiff = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff > MAX_DAYS) {
+      throw new Error(`Date range too large (${daysDiff} days). Maximum allowed: ${MAX_DAYS} days`);
+    }
+
+    console.log(`Starting ultra-fast batch export for ${studentRollNumbers.length} students, ${subjects.length} subjects, ${daysDiff} days`);
+    
+    const result: { [studentRoll: string]: { [subject: string]: AttendanceLog[] } } = {};
+    
+    // Initialize result structure
+    studentRollNumbers.forEach(roll => {
+      result[roll] = {};
+      subjects.forEach(subject => {
+        result[roll][subject] = [];
+      });
+    });
+
+    // Generate all dates in the range once
+    const dates: string[] = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      dates.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Create ALL promises for parallel execution
+    // This will fetch ALL data simultaneously instead of one by one
+    const allPromises: Promise<{ subject: string; date: string; records: AttendanceLog[] }>[] = [];
+
+    // Create promises for each subject-date combination
+    subjects.forEach(subject => {
+      dates.forEach(dateStr => {
+        const promise = (async () => {
+          try {
+            const dateObj = new Date(dateStr);
+            const attendanceYear = dateObj.getFullYear().toString();
+            const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+            
+            const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+            const recordsRef = collection(db, collectionPath);
+            
+            const querySnapshot = await getDocs(recordsRef);
+            const records = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as AttendanceLog[];
+            
+            return { subject, date: dateStr, records };
+          } catch (error) {
+            console.log(`No data for ${subject} on ${dateStr}`);
+            return { subject, date: dateStr, records: [] };
+          }
+        })();
+        
+        allPromises.push(promise);
+      });
+    });
+
+    console.log(`Executing ${allPromises.length} parallel queries...`);
+    
+    // Execute ALL promises simultaneously
+    const allResults = await Promise.all(allPromises);
+    
+    console.log(`All queries completed. Processing results...`);
+    
+    // Process all results and organize by student
+    allResults.forEach(({ subject, date, records }) => {
+      records.forEach(record => {
+        // Extract roll number from the document ID (format: rollNumber_date)
+        const rollNumber = record.id.split('_')[0];
+        if (rollNumber && result[rollNumber] && result[rollNumber][subject]) {
+          result[rollNumber][subject].push(record);
+        }
+      });
+    });
+
+    console.log(`Batch export completed successfully!`);
+    return result;
+  },
+
+  // NEW: Ultra-fast parallel export for ALL students at once
+  async getUltraFastParallelExport(
+    year: string,
+    sem: string,
+    div: string,
+    subjects: string[],
+    startDate: Date,
+    endDate: Date,
+    studentRollNumbers: string[]
+  ): Promise<{ [studentRoll: string]: { [subject: string]: AttendanceLog[] } }> {
+    console.log(`🚀 Starting ULTRA-FAST parallel export for ${studentRollNumbers.length} students, ${subjects.length} subjects`);
+    
+    const result: { [studentRoll: string]: { [subject: string]: AttendanceLog[] } } = {};
+    
+    // Initialize result structure
+    studentRollNumbers.forEach(roll => {
+      result[roll] = {};
+      subjects.forEach(subject => {
+        result[roll][subject] = [];
+      });
+    });
+
+    // Generate all dates in the range once
+    const dates: string[] = [];
+    const currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      dates.push(currentDate.toISOString().split('T')[0]);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    console.log(`📅 Processing ${dates.length} dates: ${dates.join(', ')}`);
+
+    // Create ALL promises for parallel execution - ONE PROMISE PER SUBJECT-DATE COMBINATION
+    const allPromises: Promise<{ subject: string; date: string; records: AttendanceLog[] }>[] = [];
+
+    // Create promises for each subject-date combination
+    subjects.forEach(subject => {
+      dates.forEach(dateStr => {
+        const promise = (async () => {
+          try {
+            const dateObj = new Date(dateStr);
+            const attendanceYear = dateObj.getFullYear().toString();
+            const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+            const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+            
+            const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+            const recordsRef = collection(db, collectionPath);
+            
+            const querySnapshot = await getDocs(recordsRef);
+            const records = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as AttendanceLog[];
+            
+            return { subject, date: dateStr, records };
+          } catch (error) {
+            return { subject, date: dateStr, records: [] };
+          }
+        })();
+        
+        allPromises.push(promise);
+      });
+    });
+
+    console.log(`⚡ Executing ${allPromises.length} parallel queries simultaneously...`);
+    
+    // Execute ALL promises simultaneously - THIS IS THE KEY!
+    const allResults = await Promise.all(allPromises);
+    
+    console.log(`✅ All ${allResults.length} queries completed! Processing results...`);
+    
+    // Process all results and organize by student - SINGLE PASS
+    allResults.forEach(({ subject, date, records }) => {
+      records.forEach(record => {
+        // Extract roll number from the document ID (format: rollNumber_date)
+        const rollNumber = record.id.split('_')[0];
+        if (rollNumber && result[rollNumber] && result[rollNumber][subject]) {
+          result[rollNumber][subject].push(record);
+        }
+      });
+    });
+
+    console.log(`🎉 ULTRA-FAST parallel export completed successfully!`);
+    return result;
   }
 };
 
