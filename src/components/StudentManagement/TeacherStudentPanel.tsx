@@ -344,7 +344,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             
             // Collect all attendance records for this student
             if (batchAttendance[rollNumber]) {
-              allSubjects.forEach(subject => {
+            allSubjects.forEach(subject => {
                 if (batchAttendance[rollNumber][subject]) {
                   studentAttendance.push(...batchAttendance[rollNumber][subject]);
                 }
@@ -359,16 +359,16 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             const leaveDays = studentAttendance.filter(att => att.status === 'leave').length;
             const attendancePercentage = totalDays > 0 ? ((presentDays + lateDays) / totalDays * 100).toFixed(2) : '0';
 
-            attendanceData.push({
-              name: student.name,
-              email: student.email,
-              rollNumber: student.rollNumber || '',
-              phone: student.phone || '',
-              gender: student.gender || '',
-              year: student.year || '',
-              sem: student.sem || '',
-              div: student.div || '',
-              department: student.department || '',
+              attendanceData.push({
+                name: student.name,
+                email: student.email,
+                rollNumber: student.rollNumber || '',
+                phone: student.phone || '',
+                gender: student.gender || '',
+                year: student.year || '',
+                sem: student.sem || '',
+                div: student.div || '',
+                department: student.department || '',
               subject: 'All Subjects',
               totalDays,
               presentDays,
@@ -376,7 +376,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
               lateDays,
               leaveDays,
               attendancePercentage: `${attendancePercentage}%`,
-              status: student.isActive ? 'Active' : 'Inactive'
+                status: student.isActive ? 'Active' : 'Inactive'
             });
           }
         } catch (error) {

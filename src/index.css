@@ -430,9 +430,7 @@
   @apply h-4 bg-gray-200 rounded animate-pulse;
 }
 
-.skeleton-mobile-avatar {
-  @apply w-12 h-12 bg-gray-200 rounded-full animate-pulse;
-}
+
 
 /* Mobile-specific error states */
 .error-mobile {

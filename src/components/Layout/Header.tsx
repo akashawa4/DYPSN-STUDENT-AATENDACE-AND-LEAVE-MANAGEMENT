@@ -67,11 +67,9 @@ const Header: React.FC<HeaderProps> = ({
               onClick={() => setShowProfileMenu(!showProfileMenu)}
               className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded-xl transition-colors active:scale-95"
             >
-              <img 
-                src={user?.avatar || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150'} 
-                alt={user?.name}
-                className="w-9 h-9 rounded-full object-cover border-2 border-gray-200"
-              />
+              <div className="w-9 h-9 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-sm border-2 border-gray-200">
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
               <span className="hidden md:block text-sm font-medium text-gray-700">{user?.name}</span>
             </button>
 
@@ -85,11 +83,9 @@ const Header: React.FC<HeaderProps> = ({
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-mobile-lg border border-gray-200 z-40 animate-scale-in">
                   <div className="p-4 border-b border-gray-200">
                     <div className="flex items-center space-x-3">
-                      <img 
-                        src={user?.avatar || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150'} 
-                        alt={user?.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
+                      <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-base">
+                        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                      </div>
                       <div>
                         <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
                         <p className="text-xs text-gray-500">{user?.email}</p>

@@ -21,11 +21,9 @@ import TakeAttendancePanel from './components/Attendance/TakeAttendancePanel';
 const ProfilePage: React.FC<{ user: any }> = ({ user }) => (
   <div className="max-w-md mx-auto bg-white rounded-xl shadow-md p-6 border border-gray-200 mt-8">
     <div className="flex flex-col items-center">
-      <img
-        src={user?.avatar || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150'}
-        alt={user?.name}
-        className="w-24 h-24 rounded-full object-cover mb-4 border-4 border-blue-100"
-      />
+      <div className="w-24 h-24 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-3xl mb-4 border-4 border-blue-100">
+        {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+      </div>
       <h2 className="text-2xl font-bold text-gray-900 mb-1">{user?.name}</h2>
       <p className="text-gray-600 mb-2">{user?.email}</p>
       <p className="text-blue-600 capitalize font-medium mb-4">{user?.role}</p>

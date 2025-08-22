@@ -5,7 +5,6 @@ export interface User {
   role: 'student' | 'teacher' | 'hod';
   department: string;
   accessLevel: 'basic' | 'approver' | 'full';
-  avatar?: string;
   isActive: boolean;
   phone?: string;
   rollNumber?: string;

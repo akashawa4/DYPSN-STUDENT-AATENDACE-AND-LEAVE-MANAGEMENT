@@ -127,11 +127,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentPage, onPageC
         {/* User Profile Section - Fixed */}
         <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-gray-50">
           <div className="flex items-center space-x-3 mb-3">
-            <img 
-              src={user?.avatar || 'https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=150'} 
-              alt={user?.name}
-              className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-mobile"
-            />
+            <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white font-semibold text-base border-2 border-white shadow-mobile">
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
               <p className="text-xs text-gray-500 capitalize">{user?.role}</p>

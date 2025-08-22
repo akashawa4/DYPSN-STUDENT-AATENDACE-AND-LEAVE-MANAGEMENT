@@ -18,16 +18,27 @@ const MyLeaves: React.FC = () => {
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [leaveRecords, setLeaveRecords] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   // Add year/sem/div state for teacher/HOD
   const [year, setYear] = useState(YEARS[0]);
   const [sem, setSem] = useState(SEMS[0]);
   const [div, setDiv] = useState(DIVS[0]);
 
-  // Load leave requests
+  // Load leave requests with optimized loading and timeout
   useEffect(() => {
     const loadLeaveRequests = async () => {
       if (!user) return;
       setLoading(true);
+      setError(null);
+      console.log(`🔄 Loading leave requests for user: ${user.name} (${user.role})`);
+      
+      // Add timeout to prevent infinite loading
+      const timeoutId = setTimeout(() => {
+        setLoading(false);
+        setError('Loading timeout. Please try again.');
+        console.log('⏰ Loading timeout reached');
+      }, 30000); // 30 seconds timeout
+      
       try {
         if (user.role === 'teacher' || user.role === 'hod') {
           // Fetch from hierarchical leave collection for the currently selected class and month
@@ -36,6 +47,8 @@ const MyLeaves: React.FC = () => {
           const now = new Date();
           const month = String(now.getMonth() + 1).padStart(2, '0');
           const yearForMonth = String(now.getFullYear());
+
+          console.log(`📅 Fetching leaves for: ${numericYear}/${sem}/${div}/${subject}/${yearForMonth}/${month}`);
 
           const classLeaves = await leaveService.getClassLeavesByMonth(
             numericYear,
@@ -48,15 +61,22 @@ const MyLeaves: React.FC = () => {
 
           // Restrict to teacher's department if present on records
           const filtered = classLeaves.filter(l => !l.department || l.department === user.department);
+          console.log(`✅ Loaded ${filtered.length} leave records for teacher/HOD`);
           setLeaveRecords(filtered);
         } else {
           // Student: only their own leaves
+          console.log(`📚 Fetching student leaves for: ${user.id}`);
           const requests = await leaveService.getLeaveRequestsByUser(user.id);
+          console.log(`✅ Loaded ${requests.length} leave records for student`);
           setLeaveRecords(requests);
         }
       } catch (error) {
-        console.error('Error loading leave requests:', error);
+        console.error('❌ Error loading leave requests:', error);
+        setError('Failed to load leave requests. Please try again.');
+        // Set empty array to prevent infinite loading
+        setLeaveRecords([]);
       } finally {
+        clearTimeout(timeoutId);
         setLoading(false);
       }
     };
@@ -198,13 +218,47 @@ const MyLeaves: React.FC = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Leaves</h1>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {user?.role === 'teacher' || user?.role === 'hod' ? 'Student Leaves' : 'My Leaves'}
+            </h1>
             <p className="text-gray-600">Track and manage your leave requests</p>
           </div>
         </div>
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">Loading leave requests...</span>
+          <span className="ml-2 text-gray-600">
+            {user?.role === 'teacher' || user?.role === 'hod' 
+              ? `Loading leaves for ${year}/${sem}/${div}...` 
+              : 'Loading leave requests...'
+            }
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {user?.role === 'teacher' || user?.role === 'hod' ? 'Student Leaves' : 'My Leaves'}
+            </h1>
+            <p className="text-gray-600">Track and manage your leave requests</p>
+          </div>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
+            <span className="text-red-800">{error}</span>
+          </div>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+          >
+            Try again
+          </button>
         </div>
       </div>
     );

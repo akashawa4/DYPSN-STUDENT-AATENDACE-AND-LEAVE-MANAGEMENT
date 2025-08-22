@@ -563,7 +563,7 @@ export const leaveService = {
     }
   },
 
-  // NEW: Read leaves from hierarchical leave structure for an entire month
+  // OPTIMIZED: Read leaves from hierarchical leave structure for an entire month using parallel queries
   async getClassLeavesByMonth(
     year: string,
     sem: string,
@@ -572,21 +572,50 @@ export const leaveService = {
     month: string, // MM
     yearForMonth: string // YYYY
   ): Promise<LeaveRequest[]> {
+    console.log(`🚀 Starting optimized leave fetch for ${year}/${sem}/${div}/${subject}/${yearForMonth}/${month}`);
+    
     const results: LeaveRequest[] = [];
-    // Iterate days 01..31 and attempt to read each date collection
-    for (let day = 1; day <= 31; day++) {
+    
+    // Create all day queries in parallel instead of sequential
+    const dayPromises: Promise<LeaveRequest[]>[] = [];
+    
+    // Get the number of days in the month
+    const daysInMonth = new Date(parseInt(yearForMonth), parseInt(month), 0).getDate();
+    
+    for (let day = 1; day <= daysInMonth; day++) {
       const d = String(day).padStart(2, '0');
       const path = `${COLLECTIONS.LEAVE}/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${yearForMonth}/${month}/${d}`;
-      try {
-        const colRef = collection(db, path);
-        const snap = await getDocs(colRef);
-        if (!snap.empty) {
-          snap.docs.forEach(doc => results.push({ id: doc.id, ...doc.data() } as LeaveRequest));
+      
+      const dayPromise = (async () => {
+        try {
+          const colRef = collection(db, path);
+          const snap = await getDocs(colRef);
+          if (!snap.empty) {
+            return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest));
+          }
+          return [];
+        } catch (error) {
+          // Non-existent day path - skip silently
+          console.log(`No leave data for ${path}`);
+          return [];
         }
-      } catch {
-        // Non-existent day path - skip silently
-      }
+      })();
+      
+      dayPromises.push(dayPromise);
     }
+    
+    console.log(`⚡ Executing ${dayPromises.length} parallel day queries...`);
+    
+    // Execute all day queries in parallel
+    const dayResults = await Promise.all(dayPromises);
+    
+    // Combine all results
+    dayResults.forEach(dayLeaves => {
+      results.push(...dayLeaves);
+    });
+    
+    console.log(`✅ Found ${results.length} leave records for ${year}/${sem}/${div}/${subject}/${yearForMonth}/${month}`);
+    
     return results;
   },
 
