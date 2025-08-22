@@ -18,7 +18,16 @@ const LoginForm: React.FC = () => {
       await login(email, password);
       setSuccess('Login successful!');
     } catch (err: any) {
-      setError(err.message || 'Invalid credentials. Please try again.');
+      // Provide more specific error messages
+      if (err.message.includes('phone number')) {
+        setError('Student account found but phone number is missing. Please contact administrator.');
+      } else if (err.message.includes('Invalid password')) {
+        setError('Invalid password. Please check your credentials.');
+      } else if (err.message.includes('User not found')) {
+        setError('User not found. Please check your email or contact administrator.');
+      } else {
+        setError(err.message || 'Invalid credentials. Please try again.');
+      }
     }
   };
 
@@ -138,6 +147,8 @@ const LoginForm: React.FC = () => {
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     Students: Use your phone number as password
+                    <br />
+                    <span className="text-blue-600">Format: 10-digit number (e.g., 9876543210)</span>
                   </p>
                 </div>
                 

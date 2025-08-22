@@ -215,34 +215,105 @@ export const userService = {
 
   // Validate student credentials (email and phone number)
   async validateStudentCredentials(email: string, phoneNumber: string): Promise<User | null> {
-    const usersRef = collection(db, COLLECTIONS.USERS);
-    const q = query(
-      usersRef, 
-      where('email', '==', email), 
-      where('role', '==', 'student')
-    );
-    const querySnapshot = await getDocs(q);
+    console.log(`🔍 Searching for student with email: ${email}`);
     
-    if (querySnapshot.empty) {
+    // First, try to find student in organized collections
+    try {
+      // Search in all possible year/sem/div combinations
+      const years = ['2', '3', '4']; // Common engineering years
+      const sems = ['3', '5', '7']; // Common semesters
+      const divs = ['A', 'B', 'C']; // Common divisions
+      
+      for (const year of years) {
+        for (const sem of sems) {
+          for (const div of divs) {
+            try {
+              const collectionPath = `students/${year}/sems/${sem}/divs/${div}/students`;
+              const studentsRef = collection(db, collectionPath);
+              const q = query(studentsRef, where('email', '==', email));
+              const querySnapshot = await getDocs(q);
+              
+              if (!querySnapshot.empty) {
+                console.log(`✅ Student found in organized collection: ${collectionPath}`);
+                const student = querySnapshot.docs[0].data() as User;
+                
+                // Check if phone number matches (with or without country code)
+                const studentPhone = student.phone || '';
+                
+                // Only proceed if student has a phone number
+                if (!studentPhone) {
+                  console.log(`❌ Student ${student.email} has no phone number`);
+                  return null;
+                }
+                
+                const normalizedStudentPhone = studentPhone.toString().replace(/\D/g, ''); // Remove non-digits
+                const normalizedInputPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+                
+                console.log(`📱 Phone comparison: ${normalizedStudentPhone} vs ${normalizedInputPhone}`);
+                
+                // Check if phone numbers match (allowing for different formats)
+                if (normalizedStudentPhone === normalizedInputPhone || 
+                    studentPhone.toString() === phoneNumber ||
+                    studentPhone.toString().endsWith(phoneNumber) ||
+                    phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
+                  console.log(`✅ Phone number match found for student: ${student.name}`);
+                  return { id: querySnapshot.docs[0].id, ...student };
+                }
+                
+                console.log(`❌ Phone number mismatch for student: ${student.name}`);
+                return null;
+              }
+            } catch (error) {
+              console.log(`⚠️ Error searching in ${year}/${sem}/${div}:`, error);
+              continue; // Try next combination
+            }
+          }
+        }
+      }
+      
+      console.log(`❌ Student not found in organized collections`);
+      
+      // Fallback: Search in users collection
+      const usersRef = collection(db, COLLECTIONS.USERS);
+      const q = query(
+        usersRef, 
+        where('email', '==', email), 
+        where('role', '==', 'student')
+      );
+      const querySnapshot = await getDocs(q);
+      
+      if (querySnapshot.empty) {
+        console.log(`❌ Student not found in users collection either`);
+        return null;
+      }
+      
+      const student = querySnapshot.docs[0].data() as User;
+      
+      // Check if phone number matches (with or without country code)
+      const studentPhone = student.phone || '';
+      
+      // Only proceed if student has a phone number
+      if (!studentPhone) {
+        console.log(`❌ Student ${student.email} has no phone number`);
+        return null;
+      }
+      
+      const normalizedStudentPhone = studentPhone.toString().replace(/\D/g, ''); // Remove non-digits
+      const normalizedInputPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+      
+      // Check if phone numbers match (allowing for different formats)
+      if (normalizedStudentPhone === normalizedInputPhone || 
+          studentPhone.toString() === phoneNumber ||
+          studentPhone.toString().endsWith(phoneNumber) ||
+          phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
+        return { id: querySnapshot.docs[0].id, ...student };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('❌ Error in validateStudentCredentials:', error);
       return null;
     }
-    
-    const student = querySnapshot.docs[0].data() as User;
-    
-    // Check if phone number matches (with or without country code)
-    const studentPhone = student.phone || '';
-    const normalizedStudentPhone = studentPhone.replace(/\D/g, ''); // Remove non-digits
-    const normalizedInputPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-    
-    // Check if phone numbers match (allowing for different formats)
-    if (normalizedStudentPhone === normalizedInputPhone || 
-        studentPhone === phoneNumber ||
-        studentPhone.endsWith(phoneNumber) ||
-        phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
-      return { id: querySnapshot.docs[0].id, ...student };
-    }
-    
-    return null;
   },
 
   // Validate teacher credentials (email and phone number)
@@ -267,6 +338,13 @@ export const userService = {
 
     const teacher = teacherDoc!.data as User;
     const teacherPhone = teacher.phone || '';
+    
+    // Only proceed if teacher has a phone number
+    if (!teacherPhone) {
+      console.log(`Teacher ${teacher.email} has no phone number`);
+      return null;
+    }
+    
     const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
     const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
 
@@ -1271,6 +1349,57 @@ export const attendanceService = {
 
     console.log(`Batch export completed successfully!`);
     return result;
+  },
+
+  // Test function to check student data in organized collections
+  async testStudentSearch(email: string): Promise<{ found: boolean; locations: string[]; details?: any }> {
+    console.log(`🧪 Testing student search for: ${email}`);
+    const locations: string[] = [];
+    
+    try {
+      // Search in all possible year/sem/div combinations
+      const years = ['2', '3', '4'];
+      const sems = ['3', '5', '7'];
+      const divs = ['A', 'B', 'C'];
+      
+      for (const year of years) {
+        for (const sem of sems) {
+          for (const div of divs) {
+            try {
+              const collectionPath = `students/${year}/sems/${sem}/divs/${div}/students`;
+              const studentsRef = collection(db, collectionPath);
+              const q = query(studentsRef, where('email', '==', email));
+              const querySnapshot = await getDocs(q);
+              
+              if (!querySnapshot.empty) {
+                const location = `${collectionPath}/${querySnapshot.docs[0].id}`;
+                locations.push(location);
+                console.log(`✅ Found in: ${location}`);
+                
+                const student = querySnapshot.docs[0].data();
+                console.log(`📋 Student details:`, student);
+                
+                return {
+                  found: true,
+                  locations: [location],
+                  details: student
+                };
+              }
+            } catch (error) {
+              console.log(`⚠️ Error searching in ${year}/${sem}/${div}:`, error);
+              continue;
+            }
+          }
+        }
+      }
+      
+      console.log(`❌ Student not found in organized collections`);
+      return { found: false, locations: [] };
+      
+    } catch (error) {
+      console.error('❌ Error in testStudentSearch:', error);
+      return { found: false, locations: [] };
+    }
   },
 
   // NEW: Ultra-fast parallel export for ALL students at once

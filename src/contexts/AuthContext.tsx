@@ -242,29 +242,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // Check student login (email + phone as password)
-      const student = await userService.validateStudentCredentials(email, password);
-      if (student) {
-        console.log('[AuthContext] Student login with phone number:', student.email);
-        await userService.updateUser(student.id, {
-          lastLogin: new Date().toISOString(),
-          loginCount: (student.loginCount || 0) + 1
-        });
-        setUser(student);
-        localStorage.setItem('dypsn_user', JSON.stringify(student));
-        return;
+      try {
+        const student = await userService.validateStudentCredentials(email, password);
+        if (student) {
+          console.log('[AuthContext] Student login with phone number:', student.email);
+          await userService.updateUser(student.id, {
+            lastLogin: new Date().toISOString(),
+            loginCount: (student.loginCount || 0) + 1
+          });
+          setUser(student);
+          localStorage.setItem('dypsn_user', JSON.stringify(student));
+          return;
+        }
+      } catch (studentError: any) {
+        console.log('[AuthContext] Student validation error:', studentError.message);
+        // Continue to teacher validation
       }
 
       // Check teacher login (email + phone as password)
-      const teacher = await userService.validateTeacherCredentials(email, password);
-      if (teacher) {
-        console.log('[AuthContext] Teacher login with phone number:', teacher.email);
-        await userService.updateUser(teacher.id, {
-          lastLogin: new Date().toISOString(),
-          loginCount: (teacher.loginCount || 0) + 1
-        });
-        setUser(teacher);
-        localStorage.setItem('dypsn_user', JSON.stringify(teacher));
-        return;
+      try {
+        const teacher = await userService.validateTeacherCredentials(email, password);
+        if (teacher) {
+          console.log('[AuthContext] Teacher login with phone number:', teacher.email);
+          await userService.updateUser(teacher.id, {
+            lastLogin: new Date().toISOString(),
+            loginCount: (teacher.loginCount || 0) + 1
+          });
+          setUser(teacher);
+          localStorage.setItem('dypsn_user', JSON.stringify(teacher));
+          return;
+        }
+      } catch (teacherError: any) {
+        console.log('[AuthContext] Teacher validation error:', teacherError.message);
+        // Continue to Firebase authentication
       }
 
       // Try regular Firebase authentication for teachers/HODs
