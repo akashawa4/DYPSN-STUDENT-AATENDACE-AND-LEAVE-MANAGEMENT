@@ -384,37 +384,79 @@ const LeaveApprovalPanel: React.FC = () => {
     rejected: leaveRequests.filter(r => r.status === 'rejected').length + leaveRequests.filter(r => r.status === 'returned').length
   };
 
-  // Export leave requests as CSV
+  // Export leave requests as Excel (XLSX) matching requested format
   const handleExportLeaveReport = () => {
-    // Use filteredRequests for export
-    const headers = ['Sr No', 'Date', 'Type of Leave', 'Reason', 'Approved'];
+    const formatDate = (iso: string) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}-${mm}-${yyyy}`;
+    };
+
+    const yearToTY = (year?: string) => {
+      if (!year) return '';
+      const map: Record<string, string> = { '1st': 'FY', '2nd': 'SY', '3rd': 'TY', '4th': 'LY' };
+      return map[year] || year;
+    };
+
+    const deptShort = (dept?: string) => {
+      if (!dept) return '';
+      const known: Record<string, string> = {
+        'Information Technology': 'IT',
+        'Computer Science': 'CSE',
+        'Computer Science and Engineering': 'CSE',
+        'Mechanical Engineering': 'ME',
+        'Electronics': 'ENTC',
+        'Civil Engineering': 'CIVIL'
+      };
+      if (known[dept]) return known[dept];
+      return dept.split(' ').map(w => w[0]).join('').toUpperCase();
+    };
+
+    const headers = [
+      'Sr. No',
+      'Roll No',
+      'Student Name',
+      'Class',
+      'From Date',
+      'To Date',
+      'No. of Days',
+      'Reason',
+      'Status (Approved/Pending/Rejected)',
+      'Approved By (Teacher/HOD)'
+    ];
+
     const rows = filteredRequests.map((req, idx) => {
-      // Date: use fromDate - toDate if different, else just fromDate
-      const from = new Date(req.fromDate).toLocaleDateString();
-      const to = new Date(req.toDate).toLocaleDateString();
-      const dateStr = from === to ? from : `${from} - ${to}`;
-      // Type of Leave: readable
-      const type = getLeaveTypeName(req.leaveType);
-      // Approved: Yes/No
-      const approved = req.status === 'approved' ? 'Yes' : 'No';
+      const classStr = `${yearToTY((req as any).year)} ${deptShort(req.department)}`.trim();
+      // Determine approver level label
+      const approverLevel = req.status === 'pending'
+        ? (req.currentApprovalLevel || '')
+        : (req.currentApprovalLevel || 'HOD');
+
       return [
         idx + 1,
-        dateStr,
-        type,
-        req.reason?.replace(/\n|\r/g, ' '),
-        approved
+        (req as any).rollNumber || req.userId || '',
+        req.userName || '',
+        classStr,
+        formatDate(req.fromDate),
+        formatDate(req.toDate),
+        req.daysCount ?? '',
+        (req.reason || '').replace(/\n|\r/g, ' '),
+        (req.status || '').charAt(0).toUpperCase() + (req.status || '').slice(1),
+        approverLevel
       ];
     });
-    const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'leave_report.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    // Auto-width columns
+    const colWidths = headers.map((h, i) => ({ wch: Math.max(h.length + 2, ...rows.map(r => String(r[i] ?? '').length + 2)) }));
+    (worksheet as any)['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, worksheet, 'Leave Report');
+    XLSX.writeFile(wb, 'leave_approval_report.xlsx');
   };
 
   return (
@@ -439,13 +481,7 @@ const LeaveApprovalPanel: React.FC = () => {
             Review and process leave requests - {user?.role?.toUpperCase()} Level
           </p>
         </div>
-        <div className="flex items-center space-x-3">
-          <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            onClick={handleExportLeaveReport}>
-            <Download className="w-4 h-4" />
-            <span>Export Report</span>
-          </button>
-        </div>
+        <div className="flex items-center space-x-3" />
       </div>
 
       {/* Stats Cards */}

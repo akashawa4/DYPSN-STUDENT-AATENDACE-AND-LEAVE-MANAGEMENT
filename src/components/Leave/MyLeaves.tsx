@@ -30,34 +30,25 @@ const MyLeaves: React.FC = () => {
       setLoading(true);
       try {
         if (user.role === 'teacher' || user.role === 'hod') {
-          // Fetch all leave requests for teachers/HODs
-          const allRequests = await leaveService.getAllLeaveRequests();
-          
-          // For teacher/HOD view, we need to filter by student's year/sem/div
-          // Since leave requests may not have year/sem/div, we need to get student data
-          const filteredRequests = [];
-          
-          for (const leaveRequest of allRequests) {
-            // Only include leaves from students in the same department
-            if (leaveRequest.department === user.department) {
-              try {
-                // Get student data to check year/sem/div
-                const studentData = await userService.getUser(leaveRequest.userId);
-                if (studentData && studentData.role === 'student') {
-                  // Check if student matches the selected year/sem/div
-                  if (studentData.year === year && studentData.sem === sem && studentData.div === div) {
-                    filteredRequests.push(leaveRequest);
-                  }
-                }
-              } catch (error) {
-                console.log(`Could not fetch student data for ${leaveRequest.userId}:`, error);
-                // If we can't get student data, skip this leave request
-                continue;
-              }
-            }
-          }
-          
-          setLeaveRecords(filteredRequests);
+          // Fetch from hierarchical leave collection for the currently selected class and month
+          const numericYear = (year.match(/\d+/)?.[0] || year);
+          const subject = 'General';
+          const now = new Date();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const yearForMonth = String(now.getFullYear());
+
+          const classLeaves = await leaveService.getClassLeavesByMonth(
+            numericYear,
+            sem,
+            div,
+            subject,
+            month,
+            yearForMonth
+          );
+
+          // Restrict to teacher's department if present on records
+          const filtered = classLeaves.filter(l => !l.department || l.department === user.department);
+          setLeaveRecords(filtered);
         } else {
           // Student: only their own leaves
           const requests = await leaveService.getLeaveRequestsByUser(user.id);
@@ -127,13 +118,15 @@ const MyLeaves: React.FC = () => {
   };
 
   // Export leave data as CSV for the logged-in student
-  const handleExportLeaves = () => {
+  const handleExportLeaves = async () => {
     if (!filteredLeaves.length) {
       alert('No leave records to export.');
       return;
     }
     const headers = [
       'Sr No',
+      'Roll No',
+      'Student Name',
       'Request ID',
       'Type of Leave',
       'Reason',
@@ -146,13 +139,42 @@ const MyLeaves: React.FC = () => {
       'Approved Date',
       'Remarks'
     ];
-    const rows = filteredLeaves.map((leave, idx) => {
+    const rows = await Promise.all(filteredLeaves.map(async (leave, idx) => {
       const fromDate = new Date(leave.fromDate).toLocaleDateString('en-GB');
       const toDate = new Date(leave.toDate).toLocaleDateString('en-GB');
       const approvedDate = leave.approvedAt ? new Date(leave.approvedAt).toLocaleDateString('en-GB') : '';
       const approvalFlow = leave.approvalFlow ? leave.approvalFlow.join(' > ') : '';
+      // For teacher/HOD view, get student data from the leave record
+      let rollNo = '';
+      let studentName = '';
+      
+      if (user?.role === 'teacher' || user?.role === 'hod') {
+        // Get student data from the leave record
+        rollNo = (leave as any).rollNumber || '';
+        studentName = leave.userName || '';
+        
+        // If not available in leave record, try to get from student data
+        if (!rollNo || !studentName) {
+          try {
+            const studentData = await userService.getUser(leave.userId);
+            if (studentData) {
+              rollNo = studentData.rollNumber || '';
+              studentName = studentData.name || '';
+            }
+          } catch (error) {
+            console.log('Could not fetch student data for export:', error);
+          }
+        }
+      } else {
+        // For student view, use their own data
+        rollNo = user?.rollNumber || '';
+        studentName = user?.name || '';
+      }
+      
       return [
         idx + 1,
+        rollNo,
+        studentName,
         leave.id,
         getLeaveTypeName(leave.leaveType),
         (leave.reason || '').replace(/\n|\r/g, ' '),
@@ -163,9 +185,9 @@ const MyLeaves: React.FC = () => {
         approvalFlow,
         leave.approvedBy || '',
         approvedDate,
-        leave.remarks ? leave.remarks.replace(/\n|\r/g, ' ') : ''
-      ];
-    });
+                 leave.remarks ? leave.remarks.replace(/\n|\r/g, ' ') : ''
+       ];
+     }));
     const csv = [headers, ...rows].map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     saveAs(blob, `my_leaves_${user?.rollNumber || user?.id || 'student'}.csv`);

@@ -24,6 +24,7 @@ export const COLLECTIONS = {
   USERS: 'users',
   TEACHERS: 'teachers',
   LEAVE_REQUESTS: 'leaveRequests',
+  LEAVE: 'leave',
   ATTENDANCE: 'attendance',
   NOTIFICATIONS: 'notifications',
   AUDIT_LOGS: 'auditLogs',
@@ -257,7 +258,8 @@ export const userService = {
                     studentPhone.toString().endsWith(phoneNumber) ||
                     phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
                   console.log(`✅ Phone number match found for student: ${student.name}`);
-                  return { id: querySnapshot.docs[0].id, ...student };
+                  const { id: _ignoredId, ...studentRest } = student as any;
+                  return { id: querySnapshot.docs[0].id, ...studentRest };
                 }
                 
                 console.log(`❌ Phone number mismatch for student: ${student.name}`);
@@ -306,7 +308,8 @@ export const userService = {
           studentPhone.toString() === phoneNumber ||
           studentPhone.toString().endsWith(phoneNumber) ||
           phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
-        return { id: querySnapshot.docs[0].id, ...student };
+        const { id: _ignoredFallbackId, ...studentRest } = student as any;
+        return { id: querySnapshot.docs[0].id, ...studentRest };
       }
       
       return null;
@@ -354,7 +357,8 @@ export const userService = {
       teacherPhone.endsWith(phoneNumber) ||
       phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
     ) {
-      return { id: teacherDoc!.id, ...teacher };
+      const { id: _ignoredTId, ...teacherRest } = teacher as any;
+      return { id: teacherDoc!.id, ...teacherRest };
     }
     return null;
   },
@@ -470,6 +474,35 @@ export const leaveService = {
     };
     console.log('[createLeaveRequest] Writing leave request:', docData);
     const docRef = await addDoc(leaveRef, docData);
+
+    // Also mirror into hierarchical structure matching attendance
+    try {
+      const { year, sem, div } = (leaveData as any) || {};
+      // Leave might not be subject-specific; default to 'General'
+      const subject = ((leaveData as any)?.subject as string) || 'General';
+      const fromDateStr = (leaveData as any)?.fromDate as string | undefined;
+
+      if (year && sem && div && fromDateStr) {
+        // Use fromDate as the folder date. If a range is needed, we can extend later.
+        const dateObj = new Date(fromDateStr);
+        const y = dateObj.getFullYear().toString();
+        const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        const d = dateObj.getDate().toString().padStart(2, '0');
+
+        const hierPath = `${COLLECTIONS.LEAVE}/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${y}/${m}/${d}`;
+        const hierRef = doc(collection(db, hierPath), docRef.id);
+        await setDoc(hierRef, {
+          ...docData,
+          id: docRef.id,
+        });
+        console.log('[createLeaveRequest] Mirrored leave to hierarchical path:', hierPath, 'id:', docRef.id);
+      } else {
+        console.warn('[createLeaveRequest] Skipped hierarchical mirror (missing year/sem/div or fromDate)');
+      }
+    } catch (mirrorError) {
+      console.error('[createLeaveRequest] Failed to mirror leave to hierarchical structure:', mirrorError);
+      // Do not fail creation if mirror fails
+    }
     return docRef.id;
   },
 
@@ -505,6 +538,56 @@ export const leaveService = {
       const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
       return bTime.getTime() - aTime.getTime();
     });
+  },
+
+  // NEW: Read leaves from hierarchical leave structure for a specific date
+  async getClassLeavesByDate(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string // YYYY-MM-DD
+  ): Promise<LeaveRequest[]> {
+    const dateObj = new Date(date);
+    const y = dateObj.getFullYear().toString();
+    const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+    const d = dateObj.getDate().toString().padStart(2, '0');
+    const path = `${COLLECTIONS.LEAVE}/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${y}/${m}/${d}`;
+    try {
+      const colRef = collection(db, path);
+      const snap = await getDocs(colRef);
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest));
+    } catch (err) {
+      console.log('[leaveService.getClassLeavesByDate] No data at', path);
+      return [];
+    }
+  },
+
+  // NEW: Read leaves from hierarchical leave structure for an entire month
+  async getClassLeavesByMonth(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    month: string, // MM
+    yearForMonth: string // YYYY
+  ): Promise<LeaveRequest[]> {
+    const results: LeaveRequest[] = [];
+    // Iterate days 01..31 and attempt to read each date collection
+    for (let day = 1; day <= 31; day++) {
+      const d = String(day).padStart(2, '0');
+      const path = `${COLLECTIONS.LEAVE}/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${yearForMonth}/${month}/${d}`;
+      try {
+        const colRef = collection(db, path);
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          snap.docs.forEach(doc => results.push({ id: doc.id, ...doc.data() } as LeaveRequest));
+        }
+      } catch {
+        // Non-existent day path - skip silently
+      }
+    }
+    return results;
   },
 
   // Get pending leave requests for approval
@@ -593,6 +676,25 @@ export const leaveService = {
       // Perform the update
       await updateDoc(leaveRef, updateData);
       console.log('[updateLeaveRequestStatus] Leave request updated successfully');
+
+      // Mirror the status update into the hierarchical leave document if present
+      try {
+        const { year, sem, div } = (leaveData as any) || {};
+        const subject = ((leaveData as any)?.subject as string) || 'General';
+        const fromDateStr = (leaveData as any)?.fromDate as string | undefined;
+        if (year && sem && div && fromDateStr) {
+          const dateObj = new Date(fromDateStr);
+          const y = dateObj.getFullYear().toString();
+          const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+          const d = dateObj.getDate().toString().padStart(2, '0');
+          const hierPath = `${COLLECTIONS.LEAVE}/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${y}/${m}/${d}`;
+          const hierRef = doc(collection(db, hierPath), requestId);
+          await updateDoc(hierRef, updateData);
+          console.log('[updateLeaveRequestStatus] Mirrored update to hierarchical leave doc:', hierPath, requestId);
+        }
+      } catch (mirrorErr) {
+        console.error('[updateLeaveRequestStatus] Failed to mirror hierarchical leave update:', mirrorErr);
+      }
 
       // Create notification (optional - don't fail if this fails)
       try {
@@ -977,14 +1079,14 @@ export const attendanceService = {
       const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
       
       try {
-        const recordsRef = collection(db, collectionPath);
+    const recordsRef = collection(db, collectionPath);
         const q = query(recordsRef, where('rollNumber', '==', rollNumber));
-        const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q);
         
-        const records = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as AttendanceLog[];
+    const records = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as AttendanceLog[];
         
         attendanceRecords.push(...records);
       } catch (error) {
@@ -1247,7 +1349,7 @@ export const attendanceService = {
     }
   },
 
-  // Ultra-fast batch export function using Promise.all for parallel processing
+  // Ultra-fast batch export function using optimized batching strategies
   async getBatchAttendanceForExport(
     year: string,
     sem: string,
@@ -1255,7 +1357,8 @@ export const attendanceService = {
     subjects: string[],
     startDate: Date,
     endDate: Date,
-    studentRollNumbers: string[]
+    studentRollNumbers: string[],
+    progressCallback?: (progress: number) => void
   ): Promise<{ [studentRoll: string]: { [subject: string]: AttendanceLog[] } }> {
     // Add safety limits to prevent extremely long exports
     const MAX_STUDENTS = 100;
@@ -1275,7 +1378,7 @@ export const attendanceService = {
       throw new Error(`Date range too large (${daysDiff} days). Maximum allowed: ${MAX_DAYS} days`);
     }
 
-    console.log(`Starting ultra-fast batch export for ${studentRollNumbers.length} students, ${subjects.length} subjects, ${daysDiff} days`);
+    console.log(`🚀 Starting ULTRA-FAST batch export for ${studentRollNumbers.length} students, ${subjects.length} subjects, ${daysDiff} days`);
     
     const result: { [studentRoll: string]: { [subject: string]: AttendanceLog[] } } = {};
     
@@ -1295,33 +1398,54 @@ export const attendanceService = {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Create ALL promises for parallel execution
-    // This will fetch ALL data simultaneously instead of one by one
-    const allPromises: Promise<{ subject: string; date: string; records: AttendanceLog[] }>[] = [];
+    // OPTIMIZATION: Use larger batch queries instead of individual date queries
+    // Group dates by month to reduce the number of queries
+    const monthGroups: { [key: string]: string[] } = {};
+    dates.forEach(dateStr => {
+      const dateObj = new Date(dateStr);
+      const monthKey = `${dateObj.getFullYear()}-${(dateObj.getMonth() + 1).toString().padStart(2, '0')}`;
+      if (!monthGroups[monthKey]) {
+        monthGroups[monthKey] = [];
+      }
+      monthGroups[monthKey].push(dateStr);
+    });
 
-    // Create promises for each subject-date combination
+    console.log(`📅 Grouped ${dates.length} dates into ${Object.keys(monthGroups).length} month batches`);
+
+    // Create promises for each subject-month combination (much fewer queries)
+    const allPromises: Promise<{ subject: string; monthKey: string; records: AttendanceLog[] }>[] = [];
+
     subjects.forEach(subject => {
-      dates.forEach(dateStr => {
+      Object.keys(monthGroups).forEach(monthKey => {
         const promise = (async () => {
           try {
-            const dateObj = new Date(dateStr);
-            const attendanceYear = dateObj.getFullYear().toString();
-            const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-            const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
+            const [yearStr, monthStr] = monthKey.split('-');
+            const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${yearStr}/${monthStr}`;
+            const monthRef = collection(db, collectionPath);
             
-            const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
-            const recordsRef = collection(db, collectionPath);
+            // Get all documents in this month
+            const querySnapshot = await getDocs(monthRef);
+            const allRecords: AttendanceLog[] = [];
             
-            const querySnapshot = await getDocs(recordsRef);
-            const records = querySnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data()
-            })) as AttendanceLog[];
+            // Process each date subcollection
+            const datePromises = querySnapshot.docs.map(async (dateDoc) => {
+              const dateRef = collection(db, `${collectionPath}/${dateDoc.id}`);
+              const dateSnapshot = await getDocs(dateRef);
+              return dateSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              })) as AttendanceLog[];
+            });
             
-            return { subject, date: dateStr, records };
+            const dateResults = await Promise.all(datePromises);
+            dateResults.forEach(records => {
+              allRecords.push(...records);
+            });
+            
+            return { subject, monthKey, records: allRecords };
           } catch (error) {
-            console.log(`No data for ${subject} on ${dateStr}`);
-            return { subject, date: dateStr, records: [] };
+            console.log(`No data for ${subject} in ${monthKey}`);
+            return { subject, monthKey, records: [] };
           }
         })();
         
@@ -1329,15 +1453,19 @@ export const attendanceService = {
       });
     });
 
-    console.log(`Executing ${allPromises.length} parallel queries...`);
+    console.log(`⚡ Executing ${allPromises.length} optimized parallel queries (vs ${subjects.length * dates.length} individual queries)`);
     
-    // Execute ALL promises simultaneously
+    // Execute ALL promises simultaneously with progress updates
     const allResults = await Promise.all(allPromises);
     
-    console.log(`All queries completed. Processing results...`);
+    if (progressCallback) {
+      progressCallback(1.0); // 100% complete
+    }
+    
+    console.log(`✅ All queries completed. Processing results...`);
     
     // Process all results and organize by student
-    allResults.forEach(({ subject, date, records }) => {
+    allResults.forEach(({ subject, monthKey, records }) => {
       records.forEach(record => {
         // Extract roll number from the document ID (format: rollNumber_date)
         const rollNumber = record.id.split('_')[0];
@@ -1347,7 +1475,7 @@ export const attendanceService = {
       });
     });
 
-    console.log(`Batch export completed successfully!`);
+    console.log(`🎉 ULTRA-FAST batch export completed successfully!`);
     return result;
   },
 

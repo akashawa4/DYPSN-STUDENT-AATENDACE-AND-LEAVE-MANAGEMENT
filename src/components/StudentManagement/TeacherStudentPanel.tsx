@@ -222,8 +222,8 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
       const attendanceData: any[] = [];
       const students = filteredStudents.filter(s => s.role === 'student');
       const studentRollNumbers = students.map(s => s.rollNumber || s.id).filter(Boolean);
-      
-      if (type === 'subject') {
+          
+          if (type === 'subject') {
         // For subject-wise export, use the new organized structure
         for (const student of students) {
           try {
@@ -237,37 +237,37 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
               endDateObj
             );
             
-            const totalDays = studentAttendance.length;
-            const presentDays = studentAttendance.filter(att => att.status === 'present').length;
-            const absentDays = studentAttendance.filter(att => att.status === 'absent').length;
-            const lateDays = studentAttendance.filter(att => att.status === 'late').length;
-            const leaveDays = studentAttendance.filter(att => att.status === 'leave').length;
-            const attendancePercentage = totalDays > 0 ? ((presentDays + lateDays) / totalDays * 100).toFixed(2) : '0';
+          const totalDays = studentAttendance.length;
+          const presentDays = studentAttendance.filter(att => att.status === 'present').length;
+          const absentDays = studentAttendance.filter(att => att.status === 'absent').length;
+          const lateDays = studentAttendance.filter(att => att.status === 'late').length;
+          const leaveDays = studentAttendance.filter(att => att.status === 'leave').length;
+          const attendancePercentage = totalDays > 0 ? ((presentDays + lateDays) / totalDays * 100).toFixed(2) : '0';
 
-            attendanceData.push({
-              name: student.name,
-              email: student.email,
-              rollNumber: student.rollNumber || '',
-              phone: student.phone || '',
-              gender: student.gender || '',
-              year: student.year || '',
-              sem: student.sem || '',
-              div: student.div || '',
-              department: student.department || '',
+          attendanceData.push({
+            name: student.name,
+            email: student.email,
+            rollNumber: student.rollNumber || '',
+            phone: student.phone || '',
+            gender: student.gender || '',
+            year: student.year || '',
+            sem: student.sem || '',
+            div: student.div || '',
+            department: student.department || '',
               subject: selectedSubject,
-              totalDays,
-              presentDays,
-              absentDays,
-              lateDays,
-              leaveDays,
-              attendancePercentage: `${attendancePercentage}%`,
-              status: student.isActive ? 'Active' : 'Inactive'
-            });
+            totalDays,
+            presentDays,
+            absentDays,
+            lateDays,
+            leaveDays,
+            attendancePercentage: `${attendancePercentage}%`,
+            status: student.isActive ? 'Active' : 'Inactive'
+          });
           } catch (error) {
             console.log(`Error processing student ${student.name}:`, error);
           }
         }
-      } else {
+          } else {
         // For monthly and custom exports, use the optimized batch function
         const allSubjects = [
           'Mathematics', 'Physics', 'Chemistry', 'Computer Science', 'English', 
@@ -310,15 +310,22 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             });
           }, 1000);
           
-          // Use the NEW ultra-fast parallel function
-          const batchAttendance = await attendanceService.getUltraFastParallelExport(
+          // Use the NEW ultra-fast parallel function with progress updates
+          const batchAttendance = await attendanceService.getBatchAttendanceForExport(
             selectedYear,
             selectedSem,
             selectedDiv,
             allSubjects,
             startDateObj,
             endDateObj,
-            studentRollNumbers
+            studentRollNumbers,
+            (progress) => {
+              setExportProgress({
+                current: Math.floor(totalQueries * progress),
+                total: totalQueries,
+                message: `⚡ Ultra-fast export: ${Math.floor(progress * 100)}% complete`
+              });
+            }
           );
           
           console.log('✅ ULTRA-FAST export completed! Data received for', Object.keys(batchAttendance).length, 'students');
@@ -333,44 +340,44 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
           // Process the batch data for each student
           for (const student of students) {
             const rollNumber = student.rollNumber || student.id;
+            const studentAttendance: AttendanceLog[] = [];
+            
+            // Collect all attendance records for this student
             if (batchAttendance[rollNumber]) {
-              const studentAttendance: AttendanceLog[] = [];
-              
-              // Collect all attendance records for this student
               allSubjects.forEach(subject => {
                 if (batchAttendance[rollNumber][subject]) {
                   studentAttendance.push(...batchAttendance[rollNumber][subject]);
                 }
               });
-              
-              // Calculate statistics
-              const totalDays = studentAttendance.length;
-              const presentDays = studentAttendance.filter(att => att.status === 'present').length;
-              const absentDays = studentAttendance.filter(att => att.status === 'absent').length;
-              const lateDays = studentAttendance.filter(att => att.status === 'late').length;
-              const leaveDays = studentAttendance.filter(att => att.status === 'leave').length;
-              const attendancePercentage = totalDays > 0 ? ((presentDays + lateDays) / totalDays * 100).toFixed(2) : '0';
-
-              attendanceData.push({
-                name: student.name,
-                email: student.email,
-                rollNumber: student.rollNumber || '',
-                phone: student.phone || '',
-                gender: student.gender || '',
-                year: student.year || '',
-                sem: student.sem || '',
-                div: student.div || '',
-                department: student.department || '',
-                subject: 'All Subjects',
-                totalDays,
-                presentDays,
-                absentDays,
-                lateDays,
-                leaveDays,
-                attendancePercentage: `${attendancePercentage}%`,
-                status: student.isActive ? 'Active' : 'Inactive'
-              });
             }
+            
+            // Calculate statistics
+            const totalDays = studentAttendance.length;
+            const presentDays = studentAttendance.filter(att => att.status === 'present').length;
+            const absentDays = studentAttendance.filter(att => att.status === 'absent').length;
+            const lateDays = studentAttendance.filter(att => att.status === 'late').length;
+            const leaveDays = studentAttendance.filter(att => att.status === 'leave').length;
+            const attendancePercentage = totalDays > 0 ? ((presentDays + lateDays) / totalDays * 100).toFixed(2) : '0';
+
+            attendanceData.push({
+              name: student.name,
+              email: student.email,
+              rollNumber: student.rollNumber || '',
+              phone: student.phone || '',
+              gender: student.gender || '',
+              year: student.year || '',
+              sem: student.sem || '',
+              div: student.div || '',
+              department: student.department || '',
+              subject: 'All Subjects',
+              totalDays,
+              presentDays,
+              absentDays,
+              lateDays,
+              leaveDays,
+              attendancePercentage: `${attendancePercentage}%`,
+              status: student.isActive ? 'Active' : 'Inactive'
+            });
           }
         } catch (error) {
           console.error('Error in batch attendance export:', error);
@@ -382,16 +389,22 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             return;
           }
           
-          // Fallback to individual queries if batch fails
-          console.log('Falling back to individual queries...');
+          // Fallback to parallel individual queries if batch fails
+          console.log('Falling back to parallel individual queries...');
           
-          for (const student of students) {
+          setExportProgress({
+            current: 0,
+            total: students.length,
+            message: '🔄 Processing students in parallel...'
+          });
+          
+          // Create all promises for parallel execution
+          const studentPromises = students.map(async (student) => {
             try {
-              let studentAttendance: AttendanceLog[] = [];
-              
-              for (const subject of allSubjects) {
+              // Create promises for all subjects for this student
+              const subjectPromises = allSubjects.map(async (subject) => {
                 try {
-                  const subjectAttendance = await attendanceService.getOrganizedAttendanceByUserAndDateRange(
+                  return await attendanceService.getOrganizedAttendanceByUserAndDateRange(
                     student.rollNumber || student.id,
                     selectedYear,
                     selectedSem,
@@ -400,11 +413,20 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
                     startDateObj,
                     endDateObj
                   );
-                  studentAttendance.push(...subjectAttendance);
                 } catch (error) {
-                  console.log(`No attendance data for subject ${subject}`);
+                  console.log(`No attendance data for student ${student.name} in subject ${subject}`);
+                  return [];
                 }
-              }
+              });
+              
+              // Execute all subject queries in parallel
+              const subjectResults = await Promise.all(subjectPromises);
+              
+              // Combine all attendance records for this student
+              const studentAttendance: AttendanceLog[] = [];
+              subjectResults.forEach(subjectAttendance => {
+                studentAttendance.push(...subjectAttendance);
+              });
               
               // Calculate statistics
               const totalDays = studentAttendance.length;
@@ -414,7 +436,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
               const leaveDays = studentAttendance.filter(att => att.status === 'leave').length;
               const attendancePercentage = totalDays > 0 ? ((presentDays + lateDays) / totalDays * 100).toFixed(2) : '0';
 
-              attendanceData.push({
+              return {
                 name: student.name,
                 email: student.email,
                 rollNumber: student.rollNumber || '',
@@ -432,11 +454,22 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
                 leaveDays,
                 attendancePercentage: `${attendancePercentage}%`,
                 status: student.isActive ? 'Active' : 'Inactive'
-              });
+              };
             } catch (error) {
               console.log(`Error processing student ${student.name}:`, error);
+              return null;
             }
-          }
+          });
+          
+          // Execute all student queries in parallel
+          const studentResults = await Promise.all(studentPromises);
+          
+          // Filter out null results and add to attendance data
+          studentResults.forEach(result => {
+            if (result) {
+              attendanceData.push(result);
+            }
+          });
         }
       }
 
