@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { userService, attendanceService } from '../../firebase/firestore';
 import { User, AttendanceLog } from '../../types';
-import { Upload, Download, Users, Plus, Trash2, Edit, Search, Filter, Calendar, FileText, BarChart3 } from 'lucide-react';
+import { Upload, Download, Users, Plus, Trash2, Edit, Search, Filter, Calendar, FileText, BarChart3, Eye } from 'lucide-react';
 
 interface StudentData {
   name: string;
@@ -506,25 +506,27 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Student Management</h2>
           <p className="text-gray-600">Manage students by year, semester, and division</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-700 touch-manipulation active:scale-95 transition-transform"
           >
             <Upload size={16} />
-            Import Excel
+            <span className="hidden sm:inline">Import Excel</span>
+            <span className="sm:hidden">Import</span>
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+            className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-green-700 touch-manipulation active:scale-95 transition-transform"
           >
             <Plus size={16} />
-            Add Student
+            <span className="hidden sm:inline">Add Student</span>
+            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
@@ -536,7 +538,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2"
+            className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
           >
             {YEARS.map(year => (
               <option key={year} value={year}>{year}</option>
@@ -548,7 +550,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
           <select
             value={selectedSem}
             onChange={(e) => setSelectedSem(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2"
+            className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
           >
             {SEMS.map(sem => (
               <option key={sem} value={sem}>{sem}</option>
@@ -560,7 +562,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
           <select
             value={selectedDiv}
             onChange={(e) => setSelectedDiv(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2"
+            className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
           >
             {DIVS.map(div => (
               <option key={div} value={div}>{div}</option>
@@ -576,30 +578,99 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
               placeholder="Search students..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2 pl-10"
+              className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 pl-10 touch-manipulation"
             />
           </div>
         </div>
         <div className="flex gap-2">
           <button
             onClick={downloadTemplate}
-            className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+            className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-700 touch-manipulation active:scale-95 transition-transform"
           >
             <Download size={16} />
-            Template
+            <span className="hidden sm:inline">Template</span>
+            <span className="sm:hidden">Template</span>
           </button>
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-purple-700 touch-manipulation active:scale-95 transition-transform"
           >
             <Download size={16} />
-            Export Data
+            <span className="hidden sm:inline">Export Data</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
 
-      {/* Students Table */}
-      <div className="overflow-x-auto">
+      {/* Students List - Mobile (cards) */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="text-center text-gray-500 py-6">Loading students...</div>
+        ) : filteredStudents.length === 0 ? (
+          <div className="text-center text-gray-500 py-6">No students found</div>
+        ) : (
+          filteredStudents.map((student) => (
+            <div key={student.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-mobile">
+              <div className="flex items-center">
+                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                  <span className="text-sm font-semibold text-blue-600">
+                    {student.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  </span>
+                </div>
+                <div className="ml-3 min-w-0">
+                  <div className="font-semibold text-gray-900 truncate">{student.name}</div>
+                  <div className="text-sm text-gray-600 truncate">{student.email}</div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-gray-500">Roll No.</div>
+                  <div className="text-gray-900 font-medium">{student.rollNumber}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Contact</div>
+                  <div className="text-gray-900 font-medium">{student.phone || '-'}</div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between">
+                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                  student.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                }`}>
+                  {student.isActive ? 'Active' : 'Inactive'}
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setDetailStudent(student)}
+                    className="text-blue-600 hover:text-blue-800"
+                    aria-label="View details"
+                  >
+                    <Eye size={18} />
+                  </button>
+                  <button
+                    onClick={() => setEditingStudent(student)}
+                    className="text-green-600 hover:text-green-800"
+                    aria-label="Edit student"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  <button
+                    onClick={() => deleteStudent(student.id)}
+                    className="text-red-600 hover:text-red-800"
+                    aria-label="Delete student"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Students Table - Desktop */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="min-w-full bg-white border border-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -681,60 +752,60 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
 
       {/* Import Modal */}
       {showImportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg relative">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
             {/* Close (X) button */}
             <button
               onClick={() => setShowImportModal(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl font-bold focus:outline-none"
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 text-xl font-bold focus:outline-none z-10"
               aria-label="Close"
             >
               &times;
             </button>
-            <h3 className="text-lg font-semibold mb-4">Import Students from Excel</h3>
+            <h3 className="text-lg font-semibold mb-4 sticky top-0 bg-white pb-2">Import Students from Excel</h3>
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-2 items-center">
-                <label className="block text-sm font-medium text-gray-700 mb-2 sm:mb-0">
+                <label className="block text-sm font-medium text-gray-700 mb-2 sm:mb-0 w-full sm:w-auto">
                   <span className="mr-2">Select Excel File</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
+                  <input
+                    ref={fileInputRef}
+                    type="file"
                     accept=".xlsx,.xls,.csv"
                     onChange={e => { setImportFile(e.target.files?.[0] || null); }}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                     style={{ maxWidth: 220 }}
                   />
                 </label>
                 <button
                   onClick={async () => { if (importFile) await handleFileUpload({ target: { files: [importFile] } }); }}
-                  className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 whitespace-nowrap disabled:opacity-50"
+                  className="flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-green-700 whitespace-nowrap disabled:opacity-50 touch-manipulation active:scale-95 transition-transform w-full sm:w-auto"
                   disabled={!importFile || uploading}
                 >
                   {uploading ? 'Uploading...' : 'Upload'}
                 </button>
-                {uploading && (
-                  <div className="w-full mt-2">
-                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div className="h-2 bg-green-500" style={{ width: `${uploadProgress}%` }}></div>
-                    </div>
-                    <div className="text-xs text-gray-700 mt-1 text-center">Uploading... {uploadProgress}% complete</div>
-                  </div>
-                )}
                 <button
                   onClick={downloadTemplate}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap"
+                  className="flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-700 whitespace-nowrap touch-manipulation active:scale-95 transition-transform w-full sm:w-auto"
                 >
                   Download Template
                 </button>
               </div>
+              {uploading && (
+                <div className="w-full mt-2">
+                  <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div className="h-2 bg-green-500" style={{ width: `${uploadProgress}%` }}></div>
+                  </div>
+                  <div className="text-xs text-gray-700 mt-1 text-center">Uploading... {uploadProgress}% complete</div>
+                </div>
+              )}
               <div className="text-sm text-gray-600">
                 <p><span className="font-semibold">Required columns:</span> name, email, rollNumber</p>
                 <p><span className="font-semibold">Optional columns:</span> phone, gender, year, sem, div, department</p>
               </div>
-              <div className="flex justify-between items-center mt-2">
+              <div className="flex justify-between items-center mt-2 sticky bottom-0 bg-white pt-2">
                 <button
                   onClick={() => setShowImportModal(false)}
-                  className="text-gray-500 hover:underline bg-transparent px-2 py-1 rounded"
+                  className="text-gray-500 hover:underline bg-transparent px-2 py-1 rounded touch-manipulation active:scale-95 transition-transform"
                 >
                   Cancel
                 </button>
@@ -746,9 +817,9 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
 
       {/* Add Student Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Add New Student</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 sticky top-0 bg-white pb-2">Add New Student</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
@@ -756,7 +827,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   type="text"
                   value={newStudent.name}
                   onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   placeholder="Full Name"
                 />
               </div>
@@ -766,7 +837,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   type="email"
                   value={newStudent.email}
                   onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   placeholder="Email Address"
                 />
               </div>
@@ -776,18 +847,18 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   type="text"
                   value={newStudent.rollNumber}
                   onChange={(e) => setNewStudent({...newStudent, rollNumber: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   placeholder="Roll Number"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                   <input
                     type="tel"
                     value={newStudent.phone}
                     onChange={(e) => setNewStudent({...newStudent, phone: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                     placeholder="Phone Number"
                   />
                 </div>
@@ -796,7 +867,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={newStudent.gender}
                     onChange={(e) => setNewStudent({...newStudent, gender: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     <option value="">Select Gender</option>
                     <option value="Male">Male</option>
@@ -805,13 +876,13 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                   <select
                     value={newStudent.year}
                     onChange={(e) => setNewStudent({...newStudent, year: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {YEARS.map(year => (
                       <option key={year} value={year}>{year}</option>
@@ -823,7 +894,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={newStudent.sem}
                     onChange={(e) => setNewStudent({...newStudent, sem: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {SEMS.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
@@ -835,7 +906,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={newStudent.div}
                     onChange={(e) => setNewStudent({...newStudent, div: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {DIVS.map(div => (
                       <option key={div} value={div}>{div}</option>
@@ -843,16 +914,16 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   </select>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 sticky bottom-0 bg-white pt-2">
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-400 touch-manipulation active:scale-95 transition-transform"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={addStudent}
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  className="flex-1 bg-green-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-green-700 touch-manipulation active:scale-95 transition-transform"
                 >
                   Add Student
                 </button>
@@ -864,9 +935,9 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
 
       {/* Edit Student Modal */}
       {editingStudent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Edit Student</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 sticky top-0 bg-white pb-2">Edit Student</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -874,7 +945,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   type="text"
                   value={editingStudent.name}
                   onChange={(e) => setEditingStudent({...editingStudent, name: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                 />
               </div>
               <div>
@@ -883,7 +954,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   type="email"
                   value={editingStudent.email}
                   onChange={(e) => setEditingStudent({...editingStudent, email: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                 />
               </div>
               <div>
@@ -892,17 +963,17 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   type="text"
                   value={editingStudent.rollNumber}
                   onChange={(e) => setEditingStudent({...editingStudent, rollNumber: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
                   <input
                     type="tel"
                     value={editingStudent.phone}
                     onChange={(e) => setEditingStudent({...editingStudent, phone: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   />
                 </div>
                 <div>
@@ -910,7 +981,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={editingStudent.gender}
                     onChange={(e) => setEditingStudent({...editingStudent, gender: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     <option value="">Select Gender</option>
                     <option value="Male">Male</option>
@@ -919,13 +990,13 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                   <select
                     value={editingStudent.year}
                     onChange={(e) => setEditingStudent({...editingStudent, year: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {YEARS.map(year => (
                       <option key={year} value={year}>{year}</option>
@@ -937,7 +1008,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={editingStudent.sem}
                     onChange={(e) => setEditingStudent({...editingStudent, sem: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {SEMS.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
@@ -949,7 +1020,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={editingStudent.div}
                     onChange={(e) => setEditingStudent({...editingStudent, div: e.target.value})}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {DIVS.map(div => (
                       <option key={div} value={div}>{div}</option>
@@ -957,16 +1028,16 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   </select>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 sticky bottom-0 bg-white pt-2">
                 <button
                   onClick={() => setEditingStudent(null)}
-                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-400 touch-manipulation active:scale-95 transition-transform"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={updateStudent}
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                  className="flex-1 bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-blue-700 touch-manipulation active:scale-95 transition-transform"
                 >
                   Update Student
                 </button>
@@ -978,18 +1049,18 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
 
       {/* Export Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Export Student Data</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 sticky top-0 bg-white pb-2">Export Student Data</h3>
             <div className="space-y-4">
               {/* Always show Year, Semester, Division dropdowns */}
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                   <select
                     value={exportYear}
                     onChange={e => setExportYear(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {YEARS.map(year => (
                       <option key={year} value={year}>{year}</option>
@@ -1001,7 +1072,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={exportSem}
                     onChange={e => setExportSem(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {SEMS.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
@@ -1013,21 +1084,21 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={exportDiv}
                     onChange={e => setExportDiv(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {DIVS.map(div => (
                       <option key={div} value={div}>{div}</option>
                     ))}
                   </select>
                 </div>
-                </div>
+              </div>
               {/* Export Type and other filters remain below */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Export Type</label>
                 <select
                   value={exportType}
                   onChange={(e) => setExportType(e.target.value as any)}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                 >
                   <option value="basic">Basic Student List</option>
                   <option value="monthly">Monthly Attendance Report</option>
@@ -1042,19 +1113,19 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                     type="month"
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   />
                 </div>
               )}
               {exportType === 'custom' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
                     <input
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg p-2"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                     />
                   </div>
                   <div>
@@ -1063,7 +1134,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full border border-gray-300 rounded-lg p-2"
+                      className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                     />
                   </div>
                 </div>
@@ -1074,7 +1145,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <select
                     value={selectedSubject}
                     onChange={(e) => setSelectedSubject(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg p-2"
+                    className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     <option value="">Select a subject</option>
                     <option value="Mathematics">Mathematics</option>
@@ -1105,10 +1176,10 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <p>Export student attendance data for the selected subject for the current academic year.</p>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 sticky bottom-0 bg-white pt-2">
                 <button
                   onClick={() => setShowExportModal(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-400 touch-manipulation active:scale-95 transition-transform"
                   disabled={exporting}
                 >
                   Cancel
@@ -1116,7 +1187,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  className="flex-1 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                  className="flex-1 bg-purple-600 text-white px-4 py-2.5 sm:py-2 rounded-lg hover:bg-purple-700 disabled:opacity-50 touch-manipulation active:scale-95 transition-transform"
                 >
                   {exporting ? 'Exporting...' : 'Export'}
                 </button>
@@ -1127,9 +1198,9 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
       )}
 
       {detailStudent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Student Details</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-4 sticky top-0 bg-white pb-2">Student Details</h3>
             <div className="space-y-2">
               <div><strong>Name:</strong> {detailStudent.name}</div>
               <div><strong>Email:</strong> {detailStudent.email}</div>
@@ -1144,10 +1215,10 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
               <div><strong>Created At:</strong> {detailStudent.createdAt ? new Date(detailStudent.createdAt).toLocaleString() : '-'}</div>
               {/* Add more fields as needed */}
             </div>
-            <div className="flex justify-end mt-4">
+            <div className="flex justify-end mt-4 sticky bottom-0 bg-white pt-2">
               <button
                 onClick={() => setDetailStudent(null)}
-                className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                className="bg-gray-300 text-gray-700 px-4 py-2.5 sm:py-2 rounded-lg hover:bg-gray-400 touch-manipulation active:scale-95 transition-transform"
               >
                 Close
               </button>

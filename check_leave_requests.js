@@ -3,13 +3,13 @@ import { getFirestore, collection, getDocs } from 'firebase/firestore';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAnYtVcATytnQQCuBOE_0rK3mfhNujvU24",
-  authDomain: "dypsn-teachers-leave.firebaseapp.com",
-  projectId: "dypsn-teachers-leave",
-  storageBucket: "dypsn-teachers-leave.firebasestorage.app",
-  messagingSenderId: "682691028081",
-  appId: "1:682691028081:web:e1e869db5922a94749a7d0",
-  databaseURL: "https://dypsn-teachers-leave-default-rtdb.firebaseio.com/"
+  apiKey: "AIzaSyCViBhXXHRGvqVmtZiW5KwxNLsMNKIObp0",
+  authDomain: "dyp-cse-attendace-management.firebaseapp.com",
+  projectId: "dyp-cse-attendace-management",
+  storageBucket: "dyp-cse-attendace-management.firebasestorage.app",
+  messagingSenderId: "280758426439",
+  appId: "1:280758426439:web:b4811c1f2e96ee8c9e0a62",
+  measurementId: "G-11Q12HBJ5K"
 };
 
 // Initialize Firebase

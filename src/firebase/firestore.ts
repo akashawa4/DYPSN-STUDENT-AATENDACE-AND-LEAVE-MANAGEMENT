@@ -218,59 +218,74 @@ export const userService = {
   async validateStudentCredentials(email: string, phoneNumber: string): Promise<User | null> {
     console.log(`🔍 Searching for student with email: ${email}`);
     
-    // First, try to find student in organized collections
     try {
-      // Search in all possible year/sem/div combinations
+      // Create all queries in parallel for organized collections
       const years = ['2', '3', '4']; // Common engineering years
       const sems = ['3', '5', '7']; // Common semesters
       const divs = ['A', 'B', 'C']; // Common divisions
       
+      // Generate all possible collection paths
+      const collectionPaths: string[] = [];
       for (const year of years) {
         for (const sem of sems) {
           for (const div of divs) {
-            try {
-              const collectionPath = `students/${year}/sems/${sem}/divs/${div}/students`;
-              const studentsRef = collection(db, collectionPath);
-              const q = query(studentsRef, where('email', '==', email));
-              const querySnapshot = await getDocs(q);
-              
-              if (!querySnapshot.empty) {
-                console.log(`✅ Student found in organized collection: ${collectionPath}`);
-                const student = querySnapshot.docs[0].data() as User;
-                
-                // Check if phone number matches (with or without country code)
-                const studentPhone = student.phone || '';
-                
-                // Only proceed if student has a phone number
-                if (!studentPhone) {
-                  console.log(`❌ Student ${student.email} has no phone number`);
-                  return null;
-                }
-                
-                const normalizedStudentPhone = studentPhone.toString().replace(/\D/g, ''); // Remove non-digits
-                const normalizedInputPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
-                
-                console.log(`📱 Phone comparison: ${normalizedStudentPhone} vs ${normalizedInputPhone}`);
-                
-                // Check if phone numbers match (allowing for different formats)
-                if (normalizedStudentPhone === normalizedInputPhone || 
-                    studentPhone.toString() === phoneNumber ||
-                    studentPhone.toString().endsWith(phoneNumber) ||
-                    phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
-                  console.log(`✅ Phone number match found for student: ${student.name}`);
-                  const { id: _ignoredId, ...studentRest } = student as any;
-                  return { id: querySnapshot.docs[0].id, ...studentRest };
-                }
-                
-                console.log(`❌ Phone number mismatch for student: ${student.name}`);
-                return null;
-              }
-            } catch (error) {
-              console.log(`⚠️ Error searching in ${year}/${sem}/${div}:`, error);
-              continue; // Try next combination
-            }
+            collectionPaths.push(`students/${year}/sems/${sem}/divs/${div}/students`);
           }
         }
+      }
+      
+      // Create all queries in parallel using Promise.all - much faster!
+      const queryPromises = collectionPaths.map(async (collectionPath) => {
+        try {
+          const studentsRef = collection(db, collectionPath);
+          const q = query(studentsRef, where('email', '==', email));
+          const querySnapshot = await getDocs(q);
+          
+          if (!querySnapshot.empty) {
+            console.log(`✅ Student found in organized collection: ${collectionPath}`);
+            const student = querySnapshot.docs[0].data() as User;
+            
+            // Check if phone number matches (with or without country code)
+            const studentPhone = student.phone || '';
+            
+            // Only proceed if student has a phone number
+            if (!studentPhone) {
+              console.log(`❌ Student ${student.email} has no phone number`);
+              return null;
+            }
+            
+            const normalizedStudentPhone = studentPhone.toString().replace(/\D/g, ''); // Remove non-digits
+            const normalizedInputPhone = phoneNumber.replace(/\D/g, ''); // Remove non-digits
+            
+            console.log(`📱 Phone comparison: ${normalizedStudentPhone} vs ${normalizedInputPhone}`);
+            
+            // Check if phone numbers match (allowing for different formats)
+            if (normalizedStudentPhone === normalizedInputPhone || 
+                studentPhone.toString() === phoneNumber ||
+                studentPhone.toString().endsWith(phoneNumber) ||
+                phoneNumber.endsWith(normalizedStudentPhone.slice(-10))) {
+              console.log(`✅ Phone number match found for student: ${student.name}`);
+              const { id: _ignoredId, ...studentRest } = student as any;
+              return { id: querySnapshot.docs[0].id, ...studentRest };
+            }
+            
+            console.log(`❌ Phone number mismatch for student: ${student.name}`);
+            return null;
+          }
+          return null;
+        } catch (error) {
+          console.log(`⚠️ Error searching in ${collectionPath}:`, error);
+          return null; // Return null instead of continuing
+        }
+      });
+      
+      // Execute all queries in parallel using Promise.all
+      const results = await Promise.all(queryPromises);
+      
+      // Find the first valid result
+      const validResult = results.find(result => result !== null);
+      if (validResult) {
+        return validResult;
       }
       
       console.log(`❌ Student not found in organized collections`);

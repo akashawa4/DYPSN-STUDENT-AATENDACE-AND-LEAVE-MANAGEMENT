@@ -8,13 +8,13 @@ import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBqzZiPX2z3gdwXoSFOEnn1Qjkdx8--y6Q",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "cse-attendance-system-9c4e5.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "cse-attendance-system-9c4e5",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "cse-attendance-system-9c4e5.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "788844291261",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:788844291261:web:e984629a1505859eb003d4",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://cse-attendance-system-9c4e5-default-rtdb.firebaseio.com/"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCViBhXXHRGvqVmtZiW5KwxNLsMNKIObp0",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "dyp-cse-attendace-management.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "dyp-cse-attendace-management",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "dyp-cse-attendace-management.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "280758426439",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:280758426439:web:b4811c1f2e96ee8c9e0a62",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-11Q12HBJ5K"
 };
 
 // Initialize Firebase

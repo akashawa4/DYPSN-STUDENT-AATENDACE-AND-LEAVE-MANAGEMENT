@@ -131,18 +131,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Ensure all demo users are in Firestore on app start
     const ensureDemoUsers = async () => {
       try {
-        for (const demoUser of mockUsers) {
-          const existingUser = await userService.getUser(demoUser.id);
-          if (!existingUser) {
-            console.log('[AuthContext] Creating demo user in Firestore on app start:', demoUser.email);
-            await userService.createUser({
-              ...demoUser,
-              createdAt: new Date().toISOString(),
-              lastLogin: new Date().toISOString(),
-              loginCount: 0
-            });
+        // Create all demo user operations in parallel using Promise.all - much faster!
+        const demoUserPromises = mockUsers.map(async (demoUser) => {
+          try {
+            const existingUser = await userService.getUser(demoUser.id);
+            if (!existingUser) {
+              console.log('[AuthContext] Creating demo user in Firestore on app start:', demoUser.email);
+              await userService.createUser({
+                ...demoUser,
+                createdAt: new Date().toISOString(),
+                lastLogin: new Date().toISOString(),
+                loginCount: 0
+              });
+              return `Created: ${demoUser.email}`;
+            }
+            return `Exists: ${demoUser.email}`;
+          } catch (error) {
+            console.error(`[AuthContext] Error with demo user ${demoUser.email}:`, error);
+            return `Error: ${demoUser.email}`;
           }
-        }
+        });
+        
+        // Execute all operations in parallel
+        const results = await Promise.all(demoUserPromises);
+        console.log('[AuthContext] Initial demo users setup completed:', results);
       } catch (error) {
         console.error('[AuthContext] Error ensuring demo users on app start:', error);
       }
@@ -235,40 +247,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Check student login (email + phone as password)
-      try {
-        const student = await userService.validateStudentCredentials(email, password);
-        if (student) {
-          console.log('[AuthContext] Student login with phone number:', student.email);
-          await userService.updateUser(student.id, {
-            lastLogin: new Date().toISOString(),
-            loginCount: (student.loginCount || 0) + 1
-          });
-          setUser(student);
-          localStorage.setItem('dypsn_user', JSON.stringify(student));
-          return;
-        }
-      } catch (studentError: any) {
-        console.log('[AuthContext] Student validation error:', studentError.message);
-        // Continue to teacher validation
+      // Run student and teacher validation in parallel using Promise.all - much faster!
+      console.log('[AuthContext] Running parallel validation for student and teacher...');
+      
+      const [studentResult, teacherResult] = await Promise.all([
+        userService.validateStudentCredentials(email, password).catch(error => {
+          console.log('[AuthContext] Student validation error:', error.message);
+          return null;
+        }),
+        userService.validateTeacherCredentials(email, password).catch(error => {
+          console.log('[AuthContext] Teacher validation error:', error.message);
+          return null;
+        })
+      ]);
+
+      // Check student login result
+      if (studentResult) {
+        console.log('[AuthContext] Student login with phone number:', studentResult.email);
+        await userService.updateUser(studentResult.id, {
+          lastLogin: new Date().toISOString(),
+          loginCount: (studentResult.loginCount || 0) + 1
+        });
+        setUser(studentResult);
+        localStorage.setItem('dypsn_user', JSON.stringify(studentResult));
+        return;
       }
 
-      // Check teacher login (email + phone as password)
-      try {
-        const teacher = await userService.validateTeacherCredentials(email, password);
-        if (teacher) {
-          console.log('[AuthContext] Teacher login with phone number:', teacher.email);
-          await userService.updateUser(teacher.id, {
-            lastLogin: new Date().toISOString(),
-            loginCount: (teacher.loginCount || 0) + 1
-          });
-          setUser(teacher);
-          localStorage.setItem('dypsn_user', JSON.stringify(teacher));
-          return;
-        }
-      } catch (teacherError: any) {
-        console.log('[AuthContext] Teacher validation error:', teacherError.message);
-        // Continue to Firebase authentication
+      // Check teacher login result
+      if (teacherResult) {
+        console.log('[AuthContext] Teacher login with phone number:', teacherResult.email);
+        await userService.updateUser(teacherResult.id, {
+          lastLogin: new Date().toISOString(),
+          loginCount: (teacherResult.loginCount || 0) + 1
+        });
+        setUser(teacherResult);
+        localStorage.setItem('dypsn_user', JSON.stringify(teacherResult));
+        return;
       }
 
       // Try regular Firebase authentication for teachers/HODs
@@ -342,20 +356,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const ensureDemoUsersInFirestore = async () => {
     console.log('[AuthContext] Ensuring all demo users are in Firestore...');
     try {
-      for (const demoUser of mockUsers) {
-        const existingUser = await userService.getUser(demoUser.id);
-        if (!existingUser) {
-          console.log('[AuthContext] Creating demo user in Firestore:', demoUser.email);
-          await userService.createUser({
-            ...demoUser,
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-            loginCount: 0
-          });
-        } else {
-          console.log('[AuthContext] Demo user already exists in Firestore:', demoUser.email);
+      // Create all demo user operations in parallel using Promise.all - much faster!
+      const demoUserPromises = mockUsers.map(async (demoUser) => {
+        try {
+          const existingUser = await userService.getUser(demoUser.id);
+          if (!existingUser) {
+            console.log('[AuthContext] Creating demo user in Firestore:', demoUser.email);
+            await userService.createUser({
+              ...demoUser,
+              createdAt: new Date().toISOString(),
+              lastLogin: new Date().toISOString(),
+              loginCount: 0
+            });
+            return `Created: ${demoUser.email}`;
+          } else {
+            console.log('[AuthContext] Demo user already exists in Firestore:', demoUser.email);
+            return `Exists: ${demoUser.email}`;
+          }
+        } catch (error) {
+          console.error(`[AuthContext] Error with demo user ${demoUser.email}:`, error);
+          return `Error: ${demoUser.email}`;
         }
-      }
+      });
+      
+      // Execute all operations in parallel
+      const results = await Promise.all(demoUserPromises);
+      console.log('[AuthContext] All demo users processed:', results);
       console.log('[AuthContext] All demo users ensured in Firestore');
     } catch (error) {
       console.error('[AuthContext] Error ensuring demo users in Firestore:', error);

@@ -34,7 +34,11 @@ const StudentMyAttendance: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string>('Software Engineering');
   const [selectedDate, setSelectedDate] = useState<string>('');
   
-  // Available subjects
+  // Custom range states
+  const [customRangeFrom, setCustomRangeFrom] = useState<string>('');
+  const [customRangeTo, setCustomRangeTo] = useState<string>('');
+  const [showCustomRangeInputs, setShowCustomRangeInputs] = useState(false);
+  
   const [availableSubjects] = useState<string[]>(FIXED_SUBJECTS);
 
   // Get today's date in YYYY-MM-DD format
@@ -266,20 +270,21 @@ const StudentMyAttendance: React.FC = () => {
       return;
     }
     
-    const fromDate = prompt('Enter start date (YYYY-MM-DD):');
-    const toDate = prompt('Enter end date (YYYY-MM-DD):');
-    
-    if (!fromDate || !toDate) {
-      alert('Please enter both start and end dates.');
+    setShowCustomRangeInputs(true);
+  };
+
+  const handleCustomRangeConfirm = async () => {
+    if (!customRangeFrom || !customRangeTo) {
+      alert('Please select both start and end dates for the custom range.');
       return;
     }
-    
+
     setExporting(true);
     try {
       // Generate all dates in the range
       const dates: string[] = [];
-      const startDate = new Date(fromDate);
-      const endDate = new Date(toDate);
+      const startDate = new Date(customRangeFrom);
+      const endDate = new Date(customRangeTo);
       const currentDate = new Date(startDate);
       
       while (currentDate <= endDate) {
@@ -334,13 +339,14 @@ const StudentMyAttendance: React.FC = () => {
       
       const csv = [header, row].map(row => row.join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      saveAs(blob, `my_custom_range_${user?.year || '2nd'}_${user?.sem || '3'}_${user?.div || 'A'}_${selectedSubject}_${fromDate}_to_${toDate}.csv`);
+      saveAs(blob, `my_custom_range_${user?.year || '2nd'}_${user?.sem || '3'}_${user?.div || 'A'}_${selectedSubject}_${customRangeFrom}_to_${customRangeTo}.csv`);
       
     } catch (error) {
       console.error('Error exporting custom range report:', error);
       alert('Failed to export custom range report.');
     } finally {
       setExporting(false);
+      setShowCustomRangeInputs(false);
     }
   };
 
@@ -362,13 +368,13 @@ const StudentMyAttendance: React.FC = () => {
 
       {/* Filters and Controls */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 items-end">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
             <select 
               value={selectedSubject} 
               onChange={(e) => handleSubjectChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
             >
               {availableSubjects.map(subject => (
@@ -383,96 +389,150 @@ const StudentMyAttendance: React.FC = () => {
               type="date" 
               value={selectedDate}
               onChange={(e) => handleDateChange(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
         
-        <div className="flex justify-between items-center mt-4">
-          <div className="text-sm text-gray-600">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mt-4 space-y-3 sm:space-y-0">
+          <div className="text-sm text-gray-600 w-full sm:w-auto">
             <strong>Selected Date:</strong> {selectedDate || getTodayDate()}
           </div>
           
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <button 
               onClick={handleExportDailyReport}
               disabled={exporting || !selectedSubject || !selectedDate}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[120px]"
             >
               <Download className="w-4 h-4" />
-              <span>{exporting ? 'Exporting...' : 'Export Daily'}</span>
+              <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Daily'}</span>
+              <span className="sm:hidden">{exporting ? '...' : 'Daily'}</span>
             </button>
             
             <button 
               onClick={handleExportMonthReport}
               disabled={exporting || !selectedSubject}
-              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[120px]"
             >
               <Download className="w-4 h-4" />
-              <span>{exporting ? 'Exporting...' : 'Month Report'}</span>
+              <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Month Report'}</span>
+              <span className="sm:hidden">{exporting ? '...' : 'Month'}</span>
             </button>
             
             <button 
-              onClick={handleExportCustomRange}
+              onClick={() => setShowCustomRangeInputs(!showCustomRangeInputs)}
               disabled={exporting || !selectedSubject}
-              className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-3 sm:px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[120px]"
             >
               <Download className="w-4 h-4" />
-              <span>{exporting ? 'Exporting...' : 'Custom Range'}</span>
+              <span className="hidden sm:inline">{showCustomRangeInputs ? 'Hide Custom Range' : 'Custom Range'}</span>
+              <span className="sm:hidden">{showCustomRangeInputs ? 'Hide' : 'Custom'}</span>
             </button>
           </div>
         </div>
       </div>
 
+      {/* Custom Range Inputs */}
+      {showCustomRangeInputs && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mt-4 shadow-sm">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Export Custom Date Range</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="customRangeFrom" className="block text-sm font-medium text-gray-700 mb-2">From Date</label>
+              <input
+                type="date"
+                id="customRangeFrom"
+                value={customRangeFrom}
+                onChange={(e) => setCustomRangeFrom(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                placeholder="Select start date"
+              />
+            </div>
+            <div>
+              <label htmlFor="customRangeTo" className="block text-sm font-medium text-gray-700 mb-2">To Date</label>
+              <input
+                type="date"
+                id="customRangeTo"
+                value={customRangeTo}
+                onChange={(e) => setCustomRangeTo(e.target.value)}
+                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                placeholder="Select end date"
+              />
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3 mt-4">
+            <button
+              onClick={() => {
+                setShowCustomRangeInputs(false);
+                setCustomRangeFrom('');
+                setCustomRangeTo('');
+              }}
+              className="w-full sm:w-auto px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCustomRangeConfirm}
+              disabled={exporting || !customRangeFrom || !customRangeTo}
+              className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>{exporting ? 'Exporting...' : 'Export Custom Range'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Summary Stats */}
       {!loading && !error && studentAttendanceData.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Today's Status</p>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-xs sm:text-sm text-gray-600">Today's Status</p>
+                <p className="text-lg sm:text-2xl font-bold text-blue-600">
                   {studentAttendanceData[0]?.status === 'present' ? 'Present' : 
                    studentAttendanceData[0]?.status === 'absent' ? 'Absent' : 'Not Marked'}
                 </p>
               </div>
-              <CheckCircle className="w-8 h-8 text-blue-600" />
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600" />
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Subject</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-600">Subject</p>
+                <p className="text-sm sm:text-lg font-semibold text-gray-900">
                   {selectedSubject}
                 </p>
               </div>
-              <FileText className="w-8 h-8 text-green-600" />
+              <FileText className="w-6 h-6 sm:w-8 sm:h-8 text-green-600" />
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Date</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-xs sm:text-sm text-gray-600">Date</p>
+                <p className="text-sm sm:text-lg font-semibold text-gray-900">
                   {selectedDate || getTodayDate()}
                 </p>
               </div>
-              <Calendar className="w-8 h-8 text-purple-600" />
+              <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-purple-600" />
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg border border-gray-200">
+          <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Attendance %</p>
-                <p className="text-2xl font-bold text-amber-600">
+                <p className="text-xs sm:text-sm text-gray-600">Attendance %</p>
+                <p className="text-lg sm:text-2xl font-bold text-amber-600">
                   {studentAttendanceData[0]?.attendancePercentage || 0}%
                 </p>
               </div>
-              <TrendingUp className="w-8 h-8 text-amber-600" />
+              <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
             </div>
           </div>
         </div>
@@ -480,17 +540,17 @@ const StudentMyAttendance: React.FC = () => {
 
       {/* Loading State */}
       {loading && (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading attendance data...</p>
+        <div className="text-center py-8 sm:py-12 bg-white rounded-lg border border-gray-200">
+          <div className="animate-spin rounded-full h-6 w-6 sm:h-8 sm:w-8 border-b-2 border-blue-600 mx-auto mb-3 sm:mb-4"></div>
+          <p className="text-sm sm:text-base text-gray-600">Loading attendance data...</p>
         </div>
       )}
 
       {/* Error State */}
       {error && (
-        <div className="text-center py-12 bg-white rounded-lg border border-red-200 bg-red-50">
-          <p className="text-red-600 font-medium">{error}</p>
-          <p className="text-sm text-red-500 mt-2">Please check your selection and try again.</p>
+        <div className="text-center py-8 sm:py-12 bg-white rounded-lg border border-red-200 bg-red-50">
+          <p className="text-sm sm:text-base text-red-600 font-medium">{error}</p>
+          <p className="text-xs sm:text-sm text-red-500 mt-2">Please check your selection and try again.</p>
         </div>
       )}
 
@@ -498,29 +558,29 @@ const StudentMyAttendance: React.FC = () => {
       {!loading && !error && studentAttendanceData.length > 0 && (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[700px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sr No</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance %</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sr No</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
+                  <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance %</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {studentAttendanceData.map((data, index) => (
                   <tr key={index} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{index + 1}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{user?.name}</div>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">{index + 1}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
+                      <div className="text-xs sm:text-sm font-medium text-gray-900">{user?.name}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user?.rollNumber}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{selectedSubject}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">{user?.rollNumber}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-900">{selectedSubject}</td>
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         data.status === 'present' ? 'bg-green-100 text-green-800' :
                         data.status === 'absent' ? 'bg-red-100 text-red-800' :
@@ -530,17 +590,17 @@ const StudentMyAttendance: React.FC = () => {
                          data.status === 'absent' ? 'Absent' : 'Not Marked'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                         {data.presentCount}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
                         {data.absentCount}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         data.attendancePercentage >= 75 ? 'bg-green-100 text-green-800' :
                         data.attendancePercentage >= 60 ? 'bg-amber-100 text-amber-800' :
@@ -559,9 +619,9 @@ const StudentMyAttendance: React.FC = () => {
 
       {/* No Data State */}
       {!loading && !error && studentAttendanceData.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <p className="text-gray-600">No attendance data found for the selected date.</p>
-          <p className="text-sm text-gray-500 mt-2">Please check if attendance has been marked for the selected subject and date.</p>
+        <div className="text-center py-8 sm:py-12 bg-white rounded-lg border border-gray-200">
+          <p className="text-sm sm:text-base text-gray-600">No attendance data found for the selected date.</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-2">Please check if attendance has been marked for the selected subject and date.</p>
         </div>
       )}
     </div>
