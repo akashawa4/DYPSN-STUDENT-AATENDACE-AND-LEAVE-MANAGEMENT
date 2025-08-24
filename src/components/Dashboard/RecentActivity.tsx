@@ -196,24 +196,49 @@ const RecentActivity: React.FC = () => {
       
       try {
         setLoading(true);
-        // Get recent leave requests
-        const leaveRequests = await leaveService.getLeaveRequestsByUser(user.id);
         
-        // Convert leave requests to activity format
-        const activities = leaveRequests.slice(0, 5).map((request, index) => ({
-          id: `leave_${request.id}`,
-          type: `leave_${request.status}`,
-          title: `Leave Request ${request.status.charAt(0).toUpperCase() + request.status.slice(1)}`,
-          description: `${request.leaveType} for ${request.daysCount} day(s) - ${request.reason.substring(0, 50)}...`,
-          time: formatTimeAgo(request.submittedAt),
-          date: new Date(request.submittedAt).toLocaleDateString(),
-          icon: request.status === 'approved' ? CheckCircle : 
-                request.status === 'rejected' ? XCircle : AlertTriangle,
-          color: request.status === 'approved' ? 'text-green-600' : 
-                 request.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
-        }));
-        
-        setRecentActivities(activities);
+        if (user.role === 'student') {
+          // Students can only see their own activities
+          const leaveRequests = await leaveService.getLeaveRequestsByUser(user.id);
+          
+          // Convert leave requests to activity format
+          const activities = leaveRequests.slice(0, 5).map((request, index) => ({
+            id: `leave_${request.id}`,
+            type: `leave_${request.status}`,
+            title: `Leave Request ${request.status.charAt(0).toUpperCase() + request.status.slice(1)}`,
+            description: `${request.leaveType} for ${request.daysCount} day(s) - ${request.reason.substring(0, 50)}...`,
+            time: formatTimeAgo(request.submittedAt),
+            date: new Date(request.submittedAt).toLocaleDateString(),
+            icon: request.status === 'approved' ? CheckCircle : 
+                  request.status === 'rejected' ? XCircle : AlertTriangle,
+            color: request.status === 'approved' ? 'text-green-600' : 
+                   request.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+          }));
+          
+          setRecentActivities(activities);
+        } else if (user.role === 'teacher' || user.role === 'hod') {
+          // Teachers and HODs can see department-wide activities
+          const leaveRequests = await leaveService.getLeaveRequestsByUser(user.id);
+          
+          // Convert leave requests to activity format
+          const activities = leaveRequests.slice(0, 5).map((request, index) => ({
+            id: `leave_${request.id}`,
+            type: `leave_${request.status}`,
+            title: `Leave Request ${request.status.charAt(0).toUpperCase() + request.status.slice(1)}`,
+            description: `${request.leaveType} for ${request.daysCount} day(s) - ${request.reason.substring(0, 50)}...`,
+            time: formatTimeAgo(request.submittedAt),
+            date: new Date(request.submittedAt).toLocaleDateString(),
+            icon: request.status === 'approved' ? CheckCircle : 
+                  request.status === 'rejected' ? XCircle : AlertTriangle,
+            color: request.status === 'approved' ? 'text-green-600' : 
+                   request.status === 'rejected' ? 'text-red-600' : 'text-amber-600'
+          }));
+          
+          setRecentActivities(activities);
+        } else {
+          // Other roles see no activities
+          setRecentActivities([]);
+        }
       } catch (error) {
         console.error('Error loading recent activities:', error);
       } finally {

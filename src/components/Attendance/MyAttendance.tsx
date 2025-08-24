@@ -5,6 +5,8 @@ import { userService, attendanceService } from '../../firebase/firestore';
 import { AttendanceRecord } from '../../types';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
+import StudentAttendanceList from './StudentAttendanceList';
+import StudentMyAttendance from './StudentMyAttendance';
 
 const YEARS = ['1st', '2nd', '3rd', '4th'];
 const SEMS = ['1', '2', '3', '4', '5', '6', '7', '8'];
@@ -12,6 +14,18 @@ const DIVS = ['A', 'B', 'C', 'D'];
 
 const MyAttendance: React.FC = () => {
   const { user } = useAuth();
+  
+  // If user is teacher or HOD, show the student attendance list
+  if (user && (user.role === 'teacher' || user.role === 'hod')) {
+    return <StudentAttendanceList />;
+  }
+
+  // If user is student, show the student-specific attendance panel
+  if (user && user.role === 'student') {
+    return <StudentMyAttendance />;
+  }
+
+  // Original student attendance functionality (fallback)
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [viewType, setViewType] = useState<'calendar' | 'list'>('calendar');
   const [attendanceData, setAttendanceData] = useState<AttendanceRecord[]>([]);

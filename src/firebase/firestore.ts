@@ -1091,15 +1091,21 @@ export const attendanceService = {
     endDate: Date
   ): Promise<AttendanceLog[]> {
     // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/date/record
-    // We need to query across multiple date collections
-    const attendanceRecords: AttendanceLog[] = [];
+    // Use Promise.all for parallel date processing - much faster
     
-    // Generate date range and query each date collection
+    // Generate all dates in the range
+    const dates: Date[] = [];
     const currentDate = new Date(startDate);
     const endDateObj = new Date(endDate);
     
     while (currentDate <= endDateObj) {
-      const dateString = currentDate.toISOString().split('T')[0];
+      dates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Create promises for all dates to process in parallel
+    const datePromises = dates.map(async (date) => {
+      const dateString = date.toISOString().split('T')[0];
       const dateObj = new Date(dateString);
       const attendanceYear = dateObj.getFullYear().toString();
       const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
@@ -1108,30 +1114,33 @@ export const attendanceService = {
       const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
       
       try {
-    const recordsRef = collection(db, collectionPath);
+        const recordsRef = collection(db, collectionPath);
         const q = query(recordsRef, where('rollNumber', '==', rollNumber));
-    const querySnapshot = await getDocs(q);
+        const querySnapshot = await getDocs(q);
         
-    const records = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as AttendanceLog[];
+        const records = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as AttendanceLog[];
         
-        attendanceRecords.push(...records);
+        return records;
       } catch (error) {
         console.log(`No attendance data for date: ${dateString}`);
+        return [];
       }
-      
-      // Move to next date
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    });
     
-    // Sort by date ascending
-    return attendanceRecords.sort((a, b) => {
+    // Execute all date queries in parallel using Promise.all
+    const dateResults = await Promise.all(datePromises);
+    
+    // Flatten and sort results
+    const attendanceRecords = dateResults.flat().sort((a, b) => {
       const aDate = a.date instanceof Date ? a.date : (a.date as any)?.toDate?.() || new Date(a.date || 0);
       const bDate = b.date instanceof Date ? b.date : (b.date as any)?.toDate?.() || new Date(b.date || 0);
       return aDate.getTime() - bDate.getTime();
     });
+    
+    return attendanceRecords;
   },
 
   // Get attendance for a specific date from organized structure

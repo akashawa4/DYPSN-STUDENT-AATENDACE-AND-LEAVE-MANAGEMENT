@@ -44,7 +44,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
         setLoading(true);
         
         if (user.role === 'student') {
-          // Load student-specific data
+          // Load student-specific data only
           const currentMonth = new Date().getMonth();
           const currentYear = new Date().getFullYear();
           
@@ -58,7 +58,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
           const totalDays = currentMonthAttendance.length;
           const percentage = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(1) : '0';
           
-          // Get leave data
+          // Get leave data for this student only
           const leaveRequests = await leaveService.getLeaveRequestsByUser(user.id);
           const pendingCount = leaveRequests.filter(leave => leave.status === 'pending').length;
           const approvedCount = leaveRequests.filter(leave => leave.status === 'approved').length;
@@ -76,8 +76,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
             pendingRequests: pendingCount,
             approvedLeaves: approvedCount
           });
+          
+          // Students don't need student data
+          setStudentData([]);
+          setTotalStudents(0);
         } else if (user.role === 'teacher' || user.role === 'hod') {
-          // Load CSE department student data for teachers/HODs
+          // Load CSE department student data for teachers/HODs only
           try {
             console.log('Loading student data for teacher/HOD...');
             const allStudents = await userService.getAllStudents();

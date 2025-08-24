@@ -105,7 +105,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     });
     
     if (user.role === 'student' && dashboardData) {
-      // Student stats with real data
+      // Student stats with real data - only show their own information
       return [
         {
           id: 'attendance',
@@ -194,8 +194,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
       ];
     }
 
-    // Teacher/HOD stats with real student data
-    if (studentData && totalStudents !== undefined) {
+    // Teacher/HOD stats with real student data - only for teachers/HODs
+    if ((user.role === 'teacher' || user.role === 'hod') && studentData && totalStudents !== undefined) {
       console.log('Showing Teacher/HOD stats with real student data');
       console.log('Calculating stats with student data:', studentData);
       console.log('Total students:', totalStudents);
