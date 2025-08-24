@@ -1,0 +1,11 @@
+* [33mb9f047b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m ok
+* [33m3502d27[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m fix student leave bug
+* [33me11a309[m fix export bugs and speed
+* [33m81da400[m fix student auth
+* [33mef456bb[m fix student export speed
+* [33m01689d6[m fix
+* [33mb597655[m teacher management add with auth by email and phone
+* [33m88d02a6[m auth fix by email and password of students
+* [33m71cdbef[m leaves fix
+* [33mfd6f67f[m student management fix
+* [33m238d087[m ui fix
