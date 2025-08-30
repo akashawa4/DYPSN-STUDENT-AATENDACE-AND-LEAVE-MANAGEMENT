@@ -28,12 +28,132 @@ export const COLLECTIONS = {
   ATTENDANCE: 'attendance',
   NOTIFICATIONS: 'notifications',
   AUDIT_LOGS: 'auditLogs',
-  SETTINGS: 'settings'
+  SETTINGS: 'settings',
+  STUDENTS: 'students'
 } as const;
+
+// Department constants
+export const DEPARTMENTS = {
+  FIRST_YEAR: 'FIRST_YEAR',
+  CSE: 'CSE',
+  DATA_SCIENCE: 'DATA_SCIENCE',
+  CIVIL: 'CIVIL',
+  ELECTRICAL: 'ELECTRICAL'
+} as const;
+
+// Department display names
+export const DEPARTMENT_NAMES = {
+  [DEPARTMENTS.FIRST_YEAR]: 'First Year',
+  [DEPARTMENTS.CSE]: 'Computer Science & Engineering',
+  [DEPARTMENTS.DATA_SCIENCE]: 'Data Science (CSE)',
+  [DEPARTMENTS.CIVIL]: 'Civil Engineering',
+  [DEPARTMENTS.ELECTRICAL]: 'Electrical Engineering'
+} as const;
+
+// Batch-based collection path builder with department support
+export const buildBatchPath = {
+  // Build attendance path: /attendance/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
+  attendance: (batch: string, department: string, sem: string, div: string, subject: string, date: Date) => {
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${COLLECTIONS.ATTENDANCE}/batch/${batch}/${department}/sems/${sem}/divs/${div}/subjects/${subject}/${year}/${month}/${day}`;
+  },
+
+  // Build leave path: /leave/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
+  leave: (batch: string, department: string, sem: string, div: string, subject: string, date: Date) => {
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${COLLECTIONS.LEAVE}/batch/${batch}/${department}/sems/${sem}/divs/${div}/subjects/${subject}/${year}/${month}/${day}`;
+  },
+
+  // Build student path: /students/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/students
+  student: (batch: string, department: string, sem: string, div: string) => {
+    return `${COLLECTIONS.STUDENTS}/batch/${batch}/${department}/sems/${sem}/divs/${div}/students`;
+  },
+
+  // Build teacher path: /teachers/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/teachers
+  teacher: (batch: string, department: string, sem: string, div: string) => {
+    return `teachers/batch/${batch}/${department}/sems/${sem}/divs/${div}/teachers`;
+  },
+
+  // Build notification path: /notifications/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/{year}/{month}/{day}
+  notification: (batch: string, department: string, sem: string, div: string, date: Date) => {
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${COLLECTIONS.NOTIFICATIONS}/batch/${batch}/${department}/sems/${sem}/divs/${div}/${year}/${month}/${day}`;
+  },
+
+  // Build audit log path: /auditLogs/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/{year}/{month}/{day}
+  auditLog: (batch: string, department: string, sem: string, div: string, date: Date) => {
+    const year = date.getFullYear().toString();
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const day = date.getDate().toString().padStart(2, '0');
+    return `${COLLECTIONS.AUDIT_LOGS}/batch/${batch}/${department}/sems/${sem}/divs/${div}/${year}/${month}/${day}`;
+  }
+};
+
+// Helper function to get batch year from student year
+export const getBatchYear = (studentYear: string): string => {
+  const currentYear = new Date().getFullYear();
+  const yearMap: { [key: string]: string } = {
+    '2': (currentYear + 2).toString(), // 2nd year students will graduate in 2 years
+    '3': (currentYear + 1).toString(), // 3rd year students will graduate in 1 year
+    '4': currentYear.toString(),        // 4th year students will graduate this year
+    'FE': (currentYear + 4).toString(), // First year students will graduate in 4 years
+    'SE': (currentYear + 3).toString(), // Second year students will graduate in 3 years
+    'TE': (currentYear + 2).toString(), // Third year students will graduate in 2 years
+    'BE': (currentYear + 1).toString()  // Final year students will graduate in 1 year
+  };
+  return yearMap[studentYear] || currentYear.toString();
+};
+
+// Helper function to get current batch year
+export const getCurrentBatchYear = (): string => {
+  return new Date().getFullYear().toString();
+};
+
+// Helper function to get department from student data
+export const getDepartment = (studentData: any): string => {
+  // Map department names to constants
+  const departmentMap: { [key: string]: string } = {
+    'first year': DEPARTMENTS.FIRST_YEAR,
+    'first_year': DEPARTMENTS.FIRST_YEAR,
+    'FIRST_YEAR': DEPARTMENTS.FIRST_YEAR,
+    'cse': DEPARTMENTS.CSE,
+    'CSE': DEPARTMENTS.CSE,
+    'computer science': DEPARTMENTS.CSE,
+    'computer science & engineering': DEPARTMENTS.CSE,
+    'data science': DEPARTMENTS.DATA_SCIENCE,
+    'DATA_SCIENCE': DEPARTMENTS.DATA_SCIENCE,
+    'data science (cse)': DEPARTMENTS.DATA_SCIENCE,
+    'civil': DEPARTMENTS.CIVIL,
+    'CIVIL': DEPARTMENTS.CIVIL,
+    'civil engineering': DEPARTMENTS.CIVIL,
+    'electrical': DEPARTMENTS.ELECTRICAL,
+    'ELECTRICAL': DEPARTMENTS.ELECTRICAL,
+    'electrical engineering': DEPARTMENTS.ELECTRICAL
+  };
+
+  const dept = studentData.department || studentData.dept || 'CSE';
+  return departmentMap[dept.toLowerCase()] || DEPARTMENTS.CSE;
+};
+
+// Helper function to validate department
+export const isValidDepartment = (department: string): boolean => {
+  return Object.values(DEPARTMENTS).includes(department as any);
+};
+
+// Helper function to get department display name
+export const getDepartmentDisplayName = (department: string): string => {
+  return DEPARTMENT_NAMES[department as keyof typeof DEPARTMENT_NAMES] || department;
+};
 
 // User Management
 export const userService = {
-  // Create or update user
+  // Create or update user with department support
   async createUser(userData: User): Promise<void> {
     const userRef = doc(db, COLLECTIONS.USERS, userData.id);
     await setDoc(userRef, {
@@ -41,6 +161,36 @@ export const userService = {
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp()
     }, { merge: true });
+
+    // If it's a student, also save to department-based structure
+    if (userData.role === 'student' && userData.year && userData.sem && userData.div) {
+      const batch = getBatchYear(userData.year);
+      const department = getDepartment(userData);
+      const batchPath = buildBatchPath.student(batch, department, userData.sem, userData.div);
+      const studentRef = doc(db, batchPath, userData.rollNumber || userData.id);
+      await setDoc(studentRef, {
+        ...userData,
+        batchYear: batch,
+        department: department,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      }, { merge: true });
+    }
+
+    // If it's a teacher, also save to department-based structure
+    if (userData.role === 'teacher' && userData.year && userData.sem && userData.div) {
+      const batch = getBatchYear(userData.year);
+      const department = getDepartment(userData);
+      const batchPath = buildBatchPath.teacher(batch, department, userData.sem, userData.div);
+      const teacherRef = doc(db, batchPath, userData.id);
+      await setDoc(teacherRef, {
+        ...userData,
+        batchYear: batch,
+        department: department,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp()
+      }, { merge: true });
+    }
   },
 
   // Get user by ID
@@ -490,9 +640,9 @@ export const leaveService = {
     console.log('[createLeaveRequest] Writing leave request:', docData);
     const docRef = await addDoc(leaveRef, docData);
 
-    // Also mirror into hierarchical structure matching attendance
+    // Also mirror into department-based hierarchical structure
     try {
-      const { year, sem, div } = (leaveData as any) || {};
+      const { year, sem, div, department } = (leaveData as any) || {};
       // Leave might not be subject-specific; default to 'General'
       const subject = ((leaveData as any)?.subject as string) || 'General';
       const fromDateStr = (leaveData as any)?.fromDate as string | undefined;
@@ -500,22 +650,23 @@ export const leaveService = {
       if (year && sem && div && fromDateStr) {
         // Use fromDate as the folder date. If a range is needed, we can extend later.
         const dateObj = new Date(fromDateStr);
-        const y = dateObj.getFullYear().toString();
-        const m = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-        const d = dateObj.getDate().toString().padStart(2, '0');
-
-        const hierPath = `${COLLECTIONS.LEAVE}/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${y}/${m}/${d}`;
+        const batch = getBatchYear(year);
+        const dept = department || DEPARTMENTS.CSE;
+        
+        const hierPath = buildBatchPath.leave(batch, dept, sem, div, subject, dateObj);
         const hierRef = doc(collection(db, hierPath), docRef.id);
         await setDoc(hierRef, {
           ...docData,
           id: docRef.id,
+          batchYear: batch,
+          department: dept,
         });
-        console.log('[createLeaveRequest] Mirrored leave to hierarchical path:', hierPath, 'id:', docRef.id);
+        console.log('[createLeaveRequest] Mirrored leave to department-based path:', hierPath, 'id:', docRef.id);
       } else {
-        console.warn('[createLeaveRequest] Skipped hierarchical mirror (missing year/sem/div or fromDate)');
+        console.warn('[createLeaveRequest] Skipped department-based mirror (missing year/sem/div or fromDate)');
       }
     } catch (mirrorError) {
-      console.error('[createLeaveRequest] Failed to mirror leave to hierarchical structure:', mirrorError);
+      console.error('[createLeaveRequest] Failed to mirror leave to department-based structure:', mirrorError);
       // Do not fail creation if mirror fails
     }
     return docRef.id;
@@ -924,10 +1075,14 @@ export const attendanceService = {
     const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0'); // 01, 02, etc.
     const attendanceDate = dateObj.getDate().toString().padStart(2, '0'); // 01, 02, etc.
     
-    const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+    const batch = getBatchYear(year);
+    const department = (attendanceData as any).department || DEPARTMENTS.CSE;
+    const collectionPath = buildBatchPath.attendance(batch, department, sem, div, subject, dateObj);
     const attendanceRef = doc(collection(db, collectionPath), docId);
     await setDoc(attendanceRef, {
       ...attendanceData,
+      batchYear: batch,
+      department: department,
       rollNumber: rollNumber || userId,
       userName: userName || '',
       subject: subject || null,
@@ -1845,3 +2000,519 @@ export const realtimeService = {
     });
   }
 }; 
+
+// Batch Migration Service with Department Support
+export const batchMigrationService = {
+  // Migrate existing data to batch 2025 with department structure
+  async migrateToBatch2025(): Promise<{ success: boolean; message?: string; details?: any }> {
+    try {
+      console.log('[batchMigrationService] Starting migration to batch 2025 with department structure...');
+      
+      const results = {
+        students: { migrated: 0, errors: 0 },
+        teachers: { migrated: 0, errors: 0 },
+        attendance: { migrated: 0, errors: 0 },
+        leaves: { migrated: 0, errors: 0 }
+      };
+
+      // Migrate students
+      try {
+        const studentsSnapshot = await getDocs(collection(db, COLLECTIONS.USERS));
+        for (const docSnapshot of studentsSnapshot.docs) {
+          const student = docSnapshot.data();
+          if (student.role === 'student') {
+            try {
+              if (student.year && student.sem && student.div) {
+                // Use batch 2025 for existing data
+                const department = getDepartment(student);
+                const batchPath = buildBatchPath.student('2025', department, student.sem, student.div);
+                const studentRef = doc(db, batchPath, student.rollNumber || student.id);
+                await setDoc(studentRef, {
+                  ...student,
+                  batchYear: '2025',
+                  department: department,
+                  migratedFrom: 'legacy',
+                  migratedAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
+                  createdAt: serverTimestamp()
+                }, { merge: true });
+                results.students.migrated++;
+              }
+            } catch (error) {
+              console.error('[batchMigrationService] Error migrating student:', student.id, error);
+              results.students.errors++;
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[batchMigrationService] Error migrating students:', error);
+      }
+
+      // Migrate teachers
+      try {
+        const teachersSnapshot = await getDocs(collection(db, COLLECTIONS.TEACHERS));
+        for (const docSnapshot of teachersSnapshot.docs) {
+          const teacher = docSnapshot.data();
+          try {
+            if (teacher.year && teacher.sem && teacher.div) {
+              const department = getDepartment(teacher);
+              const batchPath = buildBatchPath.teacher('2025', department, teacher.sem, teacher.div);
+              const teacherRef = doc(db, batchPath, teacher.id);
+              await setDoc(teacherRef, {
+                ...teacher,
+                batchYear: '2025',
+                department: department,
+                migratedFrom: 'legacy',
+                migratedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+              }, { merge: true });
+              results.teachers.migrated++;
+            }
+          } catch (error) {
+            console.error('[batchMigrationService] Error migrating teacher:', teacher.id, error);
+            results.teachers.errors++;
+          }
+        }
+      } catch (error) {
+        console.error('[batchMigrationService] Error migrating teachers:', error);
+      }
+
+      // Migrate attendance records
+      try {
+        const attendanceSnapshot = await getDocs(collection(db, COLLECTIONS.ATTENDANCE));
+        for (const docSnapshot of attendanceSnapshot.docs) {
+          const attendance = docSnapshot.data();
+          try {
+            if (attendance.year && attendance.sem && attendance.div && attendance.subject && attendance.date) {
+              const batch = getBatchYear(attendance.year);
+              const department = getDepartment(attendance);
+              const dateObj = new Date(attendance.date);
+              const batchPath = buildBatchPath.attendance(batch, department, attendance.sem, attendance.div, attendance.subject, dateObj);
+              const attendanceRef = doc(db, batchPath, attendance.id);
+              await setDoc(attendanceRef, {
+                ...attendance,
+                batchYear: batch,
+                department: department,
+                migratedFrom: 'legacy',
+                migratedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+              }, { merge: true });
+              results.attendance.migrated++;
+            }
+          } catch (error) {
+            console.error('[batchMigrationService] Error migrating attendance:', attendance.id, error);
+            results.attendance.errors++;
+          }
+        }
+      } catch (error) {
+        console.error('[batchMigrationService] Error migrating attendance:', error);
+      }
+
+      // Migrate leave requests
+      try {
+        const leavesSnapshot = await getDocs(collection(db, COLLECTIONS.LEAVE_REQUESTS));
+        for (const docSnapshot of leavesSnapshot.docs) {
+          const leave = docSnapshot.data();
+          try {
+            if (leave.year && leave.sem && leave.div && leave.fromDate) {
+              const batch = getBatchYear(leave.year);
+              const department = getDepartment(leave);
+              const dateObj = new Date(leave.fromDate);
+              const subject = leave.subject || 'General';
+              const batchPath = buildBatchPath.leave(batch, department, leave.sem, leave.div, subject, dateObj);
+              const leaveRef = doc(db, batchPath, leave.id);
+              await setDoc(leaveRef, {
+                ...leave,
+                batchYear: batch,
+                department: department,
+                migratedFrom: 'legacy',
+                migratedAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                createdAt: serverTimestamp()
+              }, { merge: true });
+              results.leaves.migrated++;
+            }
+          } catch (error) {
+            console.error('[batchMigrationService] Error migrating leave:', leave.id, error);
+            results.leaves.errors++;
+          }
+        }
+      } catch (error) {
+        console.error('[batchMigrationService] Error migrating leaves:', error);
+      }
+
+      console.log('[batchMigrationService] Migration completed:', results);
+      return {
+        success: true,
+        message: 'Migration to batch 2025 with department structure completed successfully',
+        details: results
+      };
+    } catch (error) {
+      console.error('[batchMigrationService] Migration failed:', error);
+      return {
+        success: false,
+        message: `Migration failed: ${(error as any).message}`
+      };
+    }
+  },
+
+  // Check migration status
+  async getMigrationStatus(): Promise<{ migrated: boolean; counts?: any }> {
+    try {
+      // Check if any batch 2025 data exists
+      const batch2025Students = await getDocs(collection(db, buildBatchPath.student('2025', DEPARTMENTS.CSE, '3', 'A')));
+      const batch2025Teachers = await getDocs(collection(db, buildBatchPath.teacher('2025', DEPARTMENTS.CSE, '3', 'A')));
+      
+      if (!batch2025Students.empty || !batch2025Teachers.empty) {
+        return {
+          migrated: true,
+          counts: {
+            students: batch2025Students.size,
+            teachers: batch2025Teachers.size
+          }
+        };
+      }
+      
+      return { migrated: false };
+    } catch (error) {
+      console.error('[batchMigrationService] Error checking migration status:', error);
+      return { migrated: false };
+    }
+  }
+};
+
+// Import/Export Service with Department Support
+export const importExportService = {
+  // Export attendance data by batch and department
+  async exportAttendanceByBatch(
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    subject: string,
+    startDate: Date,
+    endDate: Date,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      const attendanceData: any[] = [];
+      
+      // Query attendance from department-based structure
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        try {
+          const path = buildBatchPath.attendance(batch, department, sem, div, subject, currentDate);
+          const snapshot = await getDocs(collection(db, path));
+          
+          snapshot.docs.forEach(doc => {
+            attendanceData.push({
+              id: doc.id,
+              ...doc.data(),
+              date: currentDate.toISOString().split('T')[0]
+            });
+          });
+        } catch (error) {
+          // Collection might not exist for this date
+          console.log(`[importExportService] No attendance data for ${currentDate.toISOString().split('T')[0]}`);
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      if (attendanceData.length === 0) {
+        return {
+          success: false,
+          message: 'No attendance data found for the specified criteria'
+        };
+      }
+
+      const filename = `attendance_${batch}_${department}_${sem}_${div}_${subject}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.${format}`;
+      
+      return {
+        success: true,
+        data: attendanceData,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('[importExportService] Error exporting attendance:', error);
+      return {
+        success: false,
+        message: `Export failed: ${(error as any).message}`
+      };
+    }
+  },
+
+  // Export leave data by batch and department
+  async exportLeavesByBatch(
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    subject: string,
+    startDate: Date,
+    endDate: Date,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      const leaveData: any[] = [];
+      
+      // Query leaves from department-based structure
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        try {
+          const path = buildBatchPath.leave(batch, department, sem, div, subject, currentDate);
+          const snapshot = await getDocs(collection(db, path));
+          
+          snapshot.docs.forEach(doc => {
+            leaveData.push({
+              id: doc.id,
+              ...doc.data(),
+              date: currentDate.toISOString().split('T')[0]
+            });
+          });
+        } catch (error) {
+          // Collection might not exist for this date
+          console.log(`[importExportService] No leave data for ${currentDate.toISOString().split('T')[0]}`);
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      if (leaveData.length === 0) {
+        return {
+          success: false,
+          message: 'No leave data found for the specified criteria'
+        };
+      }
+
+      const filename = `leaves_${batch}_${department}_${sem}_${div}_${subject}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.${format}`;
+      
+      return {
+        success: true,
+        data: leaveData,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('[importExportService] Error exporting leaves:', error);
+      return {
+        success: false,
+        message: `Export failed: ${(error as any).message}`
+      };
+    }
+  },
+
+  // Export students by batch and department
+  async exportStudentsByBatch(
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      const path = buildBatchPath.student(batch, department, sem, div);
+      const snapshot = await getDocs(collection(db, path));
+      
+      if (snapshot.empty) {
+        return {
+          success: false,
+          message: 'No students found for the specified criteria'
+        };
+      }
+
+      const students = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const filename = `students_${batch}_${department}_${sem}_${div}.${format}`;
+      
+      return {
+        success: true,
+        data: students,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('[importExportService] Error exporting students:', error);
+      return {
+        success: false,
+        message: `Export failed: ${(error as any).message}`
+      };
+    }
+  },
+
+  // Export comprehensive batch report
+  async exportBatchReport(
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    startDate: Date,
+    endDate: Date,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      // Get students
+      const studentsResult = await this.exportStudentsByBatch(batch, department, sem, div, format);
+      if (!studentsResult.success) {
+        return studentsResult;
+      }
+
+      // Get attendance
+      const attendanceResult = await this.exportAttendanceByBatch(batch, department, sem, div, 'General', startDate, endDate, format);
+      
+      // Get leaves
+      const leavesResult = await this.exportLeavesByBatch(batch, department, sem, div, 'General', startDate, endDate, format);
+
+      const report = {
+        summary: {
+          batch: batch,
+          department: getDepartmentDisplayName(department),
+          semester: sem,
+          division: div,
+          totalStudents: studentsResult.data?.length || 0,
+          totalAttendanceRecords: attendanceResult.data?.length || 0,
+          totalLeaveRequests: leavesResult.data?.length || 0,
+          dateRange: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`
+        },
+        students: studentsResult.data || [],
+        attendance: attendanceResult.data || [],
+        leaves: leavesResult.data || []
+      };
+
+      const filename = `batch_report_${batch}_${department}_${sem}_${div}_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.${format}`;
+      
+      return {
+        success: true,
+        data: report,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('[importExportService] Error exporting batch report:', error);
+      return {
+        success: false,
+        message: `Export failed: ${(error as any).message}`
+      };
+    }
+  },
+
+  // Import students with batch and department assignment
+  async importStudentsWithBatch(
+    studentsData: any[],
+    batch: string,
+    department: string,
+    sem: string,
+    div: string
+  ): Promise<{ success: boolean; imported: number; errors: string[] }> {
+    try {
+      const errors: string[] = [];
+      let imported = 0;
+
+      for (const student of studentsData) {
+        try {
+          // Validate department
+          if (!isValidDepartment(department)) {
+            errors.push(`Invalid department for student ${student.name || student.id}: ${department}`);
+            continue;
+          }
+
+          // Add batch and department info
+          const studentWithBatch = {
+            ...student,
+            batchYear: batch,
+            department: department,
+            year: student.year || sem,
+            sem: sem,
+            div: div,
+            role: 'student',
+            updatedAt: serverTimestamp(),
+            createdAt: serverTimestamp()
+          };
+
+          // Save to main users collection
+          await userService.createUser(studentWithBatch);
+          imported++;
+        } catch (error) {
+          errors.push(`Error importing student ${student.name || student.id}: ${(error as any).message}`);
+        }
+      }
+
+      return {
+        success: imported > 0,
+        imported,
+        errors
+      };
+    } catch (error) {
+      console.error('[importExportService] Error importing students:', error);
+      return {
+        success: false,
+        imported: 0,
+        errors: [`Import failed: ${(error as any).message}`]
+      };
+    }
+  },
+
+  // Get available batches
+  async getAvailableBatches(): Promise<string[]> {
+    try {
+      const batches = new Set<string>();
+      
+      // Query students collection to find existing batches
+      const studentsSnapshot = await getDocs(collection(db, COLLECTIONS.STUDENTS));
+      studentsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.batchYear) {
+          batches.add(data.batchYear);
+        }
+      });
+
+      return Array.from(batches).sort();
+    } catch (error) {
+      console.error('[importExportService] Error getting available batches:', error);
+      return [];
+    }
+  },
+
+  // Get batch statistics
+  async getBatchStatistics(batch: string): Promise<any> {
+    try {
+      const stats = {
+        batch: batch,
+        departments: {} as any,
+        totalStudents: 0,
+        totalTeachers: 0
+      };
+
+      // Get statistics for each department
+      for (const dept of Object.values(DEPARTMENTS)) {
+        try {
+          // Count students
+          const studentsSnapshot = await getDocs(collection(db, buildBatchPath.student(batch, dept, '3', 'A')));
+          const studentCount = studentsSnapshot.size;
+
+          // Count teachers
+          const teachersSnapshot = await getDocs(collection(db, buildBatchPath.teacher(batch, dept, '3', 'A')));
+          const teacherCount = teachersSnapshot.size;
+
+          stats.departments[dept] = {
+            students: studentCount,
+            teachers: teacherCount
+          };
+
+          stats.totalStudents += studentCount;
+          stats.totalTeachers += teacherCount;
+        } catch (error) {
+          // Department collection might not exist
+          stats.departments[dept] = { students: 0, teachers: 0 };
+        }
+      }
+
+      return stats;
+    } catch (error) {
+      console.error('[importExportService] Error getting batch statistics:', error);
+      return { batch, error: (error as any).message };
+    }
+  }
+};

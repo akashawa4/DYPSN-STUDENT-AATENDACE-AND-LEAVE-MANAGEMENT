@@ -269,7 +269,7 @@ const LoginForm: React.FC = () => {
         {/* Footer */}
         <div className="text-center text-xs text-gray-500 space-y-2">
           <p>Optimized for mobile devices</p>
-          <p>© 2024 DYPSN. All rights reserved.</p>
+          <p>© 2025 DYPSN. All rights reserved.</p>
         </div>
       </div>
     </div>
