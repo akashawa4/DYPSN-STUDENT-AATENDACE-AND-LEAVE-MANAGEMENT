@@ -141,6 +141,187 @@ export const getDepartment = (studentData: any): string => {
   return departmentMap[dept.toLowerCase()] || DEPARTMENTS.CSE;
 };
 
+// Helper function to get department from teacher data
+export const getTeacherDepartment = (teacherData: any): string => {
+  // Map department names to constants
+  const departmentMap: { [key: string]: string } = {
+    'first year': DEPARTMENTS.FIRST_YEAR,
+    'first_year': DEPARTMENTS.FIRST_YEAR,
+    'FIRST_YEAR': DEPARTMENTS.FIRST_YEAR,
+    'cse': DEPARTMENTS.CSE,
+    'CSE': DEPARTMENTS.CSE,
+    'computer science': DEPARTMENTS.CSE,
+    'computer science & engineering': DEPARTMENTS.CSE,
+    'data science': DEPARTMENTS.DATA_SCIENCE,
+    'DATA_SCIENCE': DEPARTMENTS.DATA_SCIENCE,
+    'data science (cse)': DEPARTMENTS.DATA_SCIENCE,
+    'civil': DEPARTMENTS.CIVIL,
+    'CIVIL': DEPARTMENTS.CIVIL,
+    'civil engineering': DEPARTMENTS.CIVIL,
+    'electrical': DEPARTMENTS.ELECTRICAL,
+    'ELECTRICAL': DEPARTMENTS.ELECTRICAL,
+    'electrical engineering': DEPARTMENTS.ELECTRICAL
+  };
+
+  const dept = teacherData.department || teacherData.dept || teacherData.assignedDepartment || 'CSE';
+  return departmentMap[dept.toLowerCase()] || DEPARTMENTS.CSE;
+};
+
+// Helper function to auto-detect department from existing Firestore data
+export const autoDetectDepartment = async (userId: string, role: 'student' | 'teacher'): Promise<string> => {
+  try {
+    if (role === 'student') {
+      // Check existing student data in Firestore
+      const userRef = doc(db, COLLECTIONS.USERS, userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        if (userData.department || userData.dept) {
+          return getDepartment(userData);
+        }
+        
+        // Check department-based collections for existing data
+        for (const dept of Object.values(DEPARTMENTS)) {
+          try {
+            const batchPath = buildBatchPath.student('2025', dept, '3', 'A');
+            const studentRef = doc(db, batchPath, userId);
+            const studentDoc = await getDoc(studentRef);
+            
+            if (studentDoc.exists()) {
+              return dept;
+            }
+          } catch (error) {
+            // Collection might not exist, continue to next department
+            continue;
+          }
+        }
+      }
+    } else if (role === 'teacher') {
+      // Check existing teacher data in Firestore
+      const teacherRef = doc(db, COLLECTIONS.TEACHERS, userId);
+      const teacherDoc = await getDoc(teacherRef);
+      
+      if (teacherDoc.exists()) {
+        const teacherData = teacherDoc.data();
+        if (teacherData.department || teacherData.dept || teacherData.assignedDepartment) {
+          return getTeacherDepartment(teacherData);
+        }
+        
+        // Check department-based collections for existing data
+        for (const dept of Object.values(DEPARTMENTS)) {
+          try {
+            const batchPath = buildBatchPath.teacher('2025', dept, '3', 'A');
+            const teacherRef = doc(db, batchPath, userId);
+            const teacherDoc = await getDoc(teacherRef);
+            
+            if (teacherDoc.exists()) {
+              return dept;
+            }
+          } catch (error) {
+            // Collection might not exist, continue to next department
+            continue;
+          }
+        }
+      }
+    }
+    
+    // Default to CSE if no department found
+    return DEPARTMENTS.CSE;
+  } catch (error) {
+    console.error('[autoDetectDepartment] Error detecting department:', error);
+    return DEPARTMENTS.CSE;
+  }
+};
+
+// Helper function to get department faculty for leave approval
+export const getDepartmentFaculty = async (department: string): Promise<any[]> => {
+  try {
+    const faculty: any[] = [];
+    
+    // Search for teachers in the specified department across all batches
+    for (const batch of ['2025', '2026', '2027', '2028']) {
+      for (const sem of ['1', '2', '3', '4', '5', '6', '7', '8']) {
+        for (const div of ['A', 'B', 'C', 'D']) {
+          try {
+            const batchPath = buildBatchPath.teacher(batch, department, sem, div);
+            const teachersSnapshot = await getDocs(collection(db, batchPath));
+            
+            teachersSnapshot.docs.forEach(doc => {
+              const teacherData = doc.data();
+              if (teacherData.role === 'teacher' && teacherData.department === department) {
+                faculty.push({
+                  id: doc.id,
+                  ...teacherData
+                });
+              }
+            });
+          } catch (error) {
+            // Collection might not exist, continue to next
+            continue;
+          }
+        }
+      }
+    }
+    
+    // Also check main teachers collection
+    const teachersQuery = query(
+      collection(db, COLLECTIONS.TEACHERS),
+      where('department', '==', department),
+      where('role', '==', 'teacher')
+    );
+    
+    const teachersSnapshot = await getDocs(teachersQuery);
+    teachersSnapshot.docs.forEach(doc => {
+      const teacherData = doc.data();
+      if (!faculty.find(f => f.id === doc.id)) {
+        faculty.push({
+          id: doc.id,
+          ...teacherData
+        });
+      }
+    });
+    
+    return faculty;
+  } catch (error) {
+    console.error('[getDepartmentFaculty] Error getting department faculty:', error);
+    return [];
+  }
+};
+
+// Helper function to get department head or coordinator
+export const getDepartmentHead = async (department: string): Promise<any | null> => {
+  try {
+    // First check for department head/coordinator in main teachers collection
+    const teachersQuery = query(
+      collection(db, COLLECTIONS.TEACHERS),
+      where('department', '==', department),
+      where('role', '==', 'teacher'),
+      where('isDepartmentHead', '==', true)
+    );
+    
+    const teachersSnapshot = await getDocs(teachersQuery);
+    if (!teachersSnapshot.empty) {
+      const teacherDoc = teachersSnapshot.docs[0];
+      return {
+        id: teacherDoc.id,
+        ...teacherDoc.data()
+      };
+    }
+    
+    // If no department head found, get the first available teacher
+    const faculty = await getDepartmentFaculty(department);
+    if (faculty.length > 0) {
+      return faculty[0];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[getDepartmentHead] Error getting department head:', error);
+    return null;
+  }
+};
+
 // Helper function to validate department
 export const isValidDepartment = (department: string): boolean => {
   return Object.values(DEPARTMENTS).includes(department as any);
@@ -153,20 +334,59 @@ export const getDepartmentDisplayName = (department: string): string => {
 
 // User Management
 export const userService = {
-  // Create or update user with department support
+  // Create or update user with department support and roll number change handling
   async createUser(userData: User): Promise<void> {
     const userRef = doc(db, COLLECTIONS.USERS, userData.id);
+    
+    // Check if this is a roll number update for existing student
+    const existingUser = await getDoc(userRef);
+    let isRollNumberChange = false;
+    let oldRollNumber = '';
+    
+    if (existingUser.exists() && userData.role === 'student') {
+      const existingData = existingUser.data();
+      if (existingData.rollNumber && existingData.rollNumber !== userData.rollNumber) {
+        isRollNumberChange = true;
+        oldRollNumber = existingData.rollNumber;
+        console.log(`[userService] Roll number change detected: ${oldRollNumber} → ${userData.rollNumber}`);
+      }
+    }
+
+    // Update main user document
     await setDoc(userRef, {
       ...userData,
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp()
     }, { merge: true });
 
-    // If it's a student, also save to department-based structure
+    // If it's a student, handle department-based structure
     if (userData.role === 'student' && userData.year && userData.sem && userData.div) {
       const batch = getBatchYear(userData.year);
-      const department = getDepartment(userData);
+      // Auto-detect department if not provided
+      let department = userData.department || (userData as any).dept;
+      if (!department) {
+        department = await autoDetectDepartment(userData.id, 'student');
+        console.log(`[userService] Auto-detected department for student ${userData.id}: ${department}`);
+      } else {
+        department = getDepartment(userData);
+      }
+      
       const batchPath = buildBatchPath.student(batch, department, userData.sem, userData.div);
+      
+      // If roll number changed, migrate historical data
+      if (isRollNumberChange && oldRollNumber) {
+        await this.migrateStudentDataOnRollNumberChange(
+          userData.id,
+          oldRollNumber,
+          userData.rollNumber!,
+          batch,
+          department,
+          userData.sem,
+          userData.div
+        );
+      }
+      
+      // Save/update student in department structure
       const studentRef = doc(db, batchPath, userData.rollNumber || userData.id);
       await setDoc(studentRef, {
         ...userData,
@@ -180,7 +400,15 @@ export const userService = {
     // If it's a teacher, also save to department-based structure
     if (userData.role === 'teacher' && userData.year && userData.sem && userData.div) {
       const batch = getBatchYear(userData.year);
-      const department = getDepartment(userData);
+      // Auto-detect department if not provided
+      let department = userData.department || (userData as any).dept || (userData as any).assignedDepartment;
+      if (!department) {
+        department = await autoDetectDepartment(userData.id, 'teacher');
+        console.log(`[userService] Auto-detected department for teacher ${userData.id}: ${department}`);
+      } else {
+        department = getTeacherDepartment(userData);
+      }
+      
       const batchPath = buildBatchPath.teacher(batch, department, userData.sem, userData.div);
       const teacherRef = doc(db, batchPath, userData.id);
       await setDoc(teacherRef, {
@@ -191,6 +419,331 @@ export const userService = {
         createdAt: serverTimestamp()
       }, { merge: true });
     }
+  },
+
+  // Migrate all student data when roll number changes
+  async migrateStudentDataOnRollNumberChange(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string
+  ): Promise<void> {
+    try {
+      console.log(`[userService] Starting data migration for roll number change: ${oldRollNumber} → ${newRollNumber}`);
+      
+      const migrationResults = {
+        attendance: { migrated: 0, errors: 0 },
+        leaves: { migrated: 0, errors: 0 },
+        notifications: { migrated: 0, errors: 0 },
+        auditLogs: { migrated: 0, errors: 0 }
+      };
+
+      // 1. Migrate attendance records
+      try {
+        await this.migrateAttendanceRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
+      } catch (error) {
+        console.error('[userService] Error migrating attendance records:', error);
+      }
+
+      // 2. Migrate leave requests
+      try {
+        await this.migrateLeaveRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
+      } catch (error) {
+        console.error('[userService] Error migrating leave records:', error);
+      }
+
+      // 3. Migrate notifications
+      try {
+        await this.migrateNotificationRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
+      } catch (error) {
+        console.error('[userService] Error migrating notification records:', error);
+      }
+
+      // 4. Migrate audit logs
+      try {
+        await this.migrateAuditLogRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
+      } catch (error) {
+        console.error('[userService] Error migrating audit log records:', error);
+      }
+
+      // 5. Update roll number mapping for future reference
+      await this.updateRollNumberMapping(userId, oldRollNumber, newRollNumber);
+
+      console.log(`[userService] Roll number change migration completed:`, migrationResults);
+    } catch (error) {
+      console.error('[userService] Error in roll number change migration:', error);
+      throw error;
+    }
+  },
+
+  // Migrate attendance records
+  async migrateAttendanceRecords(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    results: any
+  ): Promise<void> {
+    // Query all attendance records for this user across all subjects and dates
+    const attendanceQuery = query(
+      collection(db, COLLECTIONS.ATTENDANCE),
+      where('userId', '==', userId)
+    );
+    
+    const attendanceSnapshot = await getDocs(attendanceQuery);
+    
+    for (const docSnapshot of attendanceSnapshot.docs) {
+      try {
+        const attendance = docSnapshot.data();
+        
+        // Update the attendance record with new roll number
+        await updateDoc(docSnapshot.ref, {
+          rollNumber: newRollNumber,
+          userName: attendance.userName || newRollNumber,
+          updatedAt: serverTimestamp(),
+          rollNumberChanged: true,
+          previousRollNumber: oldRollNumber,
+          rollNumberChangeDate: serverTimestamp()
+        });
+        
+        results.attendance.migrated++;
+      } catch (error) {
+        console.error('[userService] Error updating attendance record:', docSnapshot.id, error);
+        results.attendance.errors++;
+      }
+    }
+
+    // Also update department-based attendance records
+    await this.migrateDepartmentBasedAttendanceRecords(
+      userId, oldRollNumber, newRollNumber, batch, department, sem, div, results
+    );
+  },
+
+  // Migrate department-based attendance records
+  async migrateDepartmentBasedAttendanceRecords(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    results: any
+  ): Promise<void> {
+    // Get all subjects this student might have attended
+    const subjects = ['General', 'Microprocessor', 'Data Structures', 'Database', 'Web Development', 'Machine Learning'];
+    
+    for (const subject of subjects) {
+      try {
+        // Query department-based attendance for this subject
+        const attendancePath = buildBatchPath.attendance(batch, department, sem, div, subject, new Date());
+        const attendanceQuery = query(
+          collection(db, attendancePath),
+          where('userId', '==', userId)
+        );
+        
+        const snapshot = await getDocs(attendanceQuery);
+        
+        for (const docSnapshot of snapshot.docs) {
+          try {
+            await updateDoc(docSnapshot.ref, {
+              rollNumber: newRollNumber,
+              userName: newRollNumber,
+              updatedAt: serverTimestamp(),
+              rollNumberChanged: true,
+              previousRollNumber: oldRollNumber,
+              rollNumberChangeDate: serverTimestamp()
+            });
+            
+            results.attendance.migrated++;
+          } catch (error) {
+            console.error('[userService] Error updating department attendance record:', docSnapshot.id, error);
+            results.attendance.errors++;
+          }
+        }
+      } catch (error) {
+        // Subject collection might not exist, continue to next
+        continue;
+      }
+    }
+  },
+
+  // Migrate leave records
+  async migrateLeaveRecords(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    results: any
+  ): Promise<void> {
+    // Query all leave requests for this user
+    const leaveQuery = query(
+      collection(db, COLLECTIONS.LEAVE_REQUESTS),
+      where('userId', '==', userId)
+    );
+    
+    const leaveSnapshot = await getDocs(leaveQuery);
+    
+    for (const docSnapshot of leaveSnapshot.docs) {
+      try {
+        await updateDoc(docSnapshot.ref, {
+          rollNumber: newRollNumber,
+          updatedAt: serverTimestamp(),
+          rollNumberChanged: true,
+          previousRollNumber: oldRollNumber,
+          rollNumberChangeDate: serverTimestamp()
+        });
+        
+        results.leaves.migrated++;
+      } catch (error) {
+        console.error('[userService] Error updating leave record:', docSnapshot.id, error);
+        results.leaves.errors++;
+      }
+    }
+
+    // Also update department-based leave records
+    await this.migrateDepartmentBasedLeaveRecords(
+      userId, oldRollNumber, newRollNumber, batch, department, sem, div, results
+    );
+  },
+
+  // Migrate department-based leave records
+  async migrateDepartmentBasedLeaveRecords(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    results: any
+  ): Promise<void> {
+    const subjects = ['General', 'Microprocessor', 'Data Structures', 'Database', 'Web Development', 'Machine Learning'];
+    
+    for (const subject of subjects) {
+      try {
+        const leavePath = buildBatchPath.leave(batch, department, sem, div, subject, new Date());
+        const leaveQuery = query(
+          collection(db, leavePath),
+          where('userId', '==', userId)
+        );
+        
+        const snapshot = await getDocs(leaveQuery);
+        
+        for (const docSnapshot of snapshot.docs) {
+          try {
+            await updateDoc(docSnapshot.ref, {
+              rollNumber: newRollNumber,
+              updatedAt: serverTimestamp(),
+              rollNumberChanged: true,
+              previousRollNumber: oldRollNumber,
+              rollNumberChangeDate: serverTimestamp()
+            });
+            
+            results.leaves.migrated++;
+          } catch (error) {
+            console.error('[userService] Error updating department leave record:', docSnapshot.id, error);
+            results.leaves.errors++;
+          }
+        }
+      } catch (error) {
+        // Subject collection might not exist, continue to next
+        continue;
+      }
+    }
+  },
+
+  // Migrate notification records
+  async migrateNotificationRecords(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    results: any
+  ): Promise<void> {
+    const notificationQuery = query(
+      collection(db, COLLECTIONS.NOTIFICATIONS),
+      where('userId', '==', userId)
+    );
+    
+    const notificationSnapshot = await getDocs(notificationQuery);
+    
+    for (const docSnapshot of notificationSnapshot.docs) {
+      try {
+        await updateDoc(docSnapshot.ref, {
+          rollNumber: newRollNumber,
+          updatedAt: serverTimestamp(),
+          rollNumberChanged: true,
+          previousRollNumber: oldRollNumber,
+          rollNumberChangeDate: serverTimestamp()
+        });
+        
+        results.notifications.migrated++;
+      } catch (error) {
+        console.error('[userService] Error updating notification record:', docSnapshot.id, error);
+        results.notifications.errors++;
+      }
+    }
+  },
+
+  // Migrate audit log records
+  async migrateAuditLogRecords(
+    userId: string,
+    oldRollNumber: string,
+    newRollNumber: string,
+    batch: string,
+    department: string,
+    sem: string,
+    div: string,
+    results: any
+  ): Promise<void> {
+    const auditQuery = query(
+      collection(db, COLLECTIONS.AUDIT_LOGS),
+      where('userId', '==', userId)
+    );
+    
+    const auditSnapshot = await getDocs(auditQuery);
+    
+    for (const docSnapshot of auditSnapshot.docs) {
+      try {
+        await updateDoc(docSnapshot.ref, {
+          rollNumber: newRollNumber,
+          updatedAt: serverTimestamp(),
+          rollNumberChanged: true,
+          previousRollNumber: oldRollNumber,
+          rollNumberChangeDate: serverTimestamp()
+        });
+        
+        results.auditLogs.migrated++;
+      } catch (error) {
+        console.error('[userService] Error updating audit log record:', docSnapshot.id, error);
+        results.auditLogs.errors++;
+      }
+    }
+  },
+
+  // Update roll number mapping for future reference
+  async updateRollNumberMapping(userId: string, oldRollNumber: string, newRollNumber: string): Promise<void> {
+    const mappingRef = doc(db, 'rollNumberMappings', userId);
+    await setDoc(mappingRef, {
+      userId: userId,
+      oldRollNumber: oldRollNumber,
+      newRollNumber: newRollNumber,
+      changeDate: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
   },
 
   // Get user by ID
@@ -627,7 +1180,7 @@ export const userService = {
 
 // Leave Request Management
 export const leaveService = {
-  // Create leave request
+  // Create leave request with automatic department faculty assignment
   async createLeaveRequest(leaveData: Omit<LeaveRequest, 'id'>): Promise<string> {
     const leaveRef = collection(db, COLLECTIONS.LEAVE_REQUESTS);
     const docData = {
@@ -640,19 +1193,51 @@ export const leaveService = {
     console.log('[createLeaveRequest] Writing leave request:', docData);
     const docRef = await addDoc(leaveRef, docData);
 
-    // Also mirror into department-based hierarchical structure
+    // Auto-detect student department and assign to department faculty
     try {
-      const { year, sem, div, department } = (leaveData as any) || {};
-      // Leave might not be subject-specific; default to 'General'
+      const { year, sem, div, department, userId } = (leaveData as any) || {};
       const subject = ((leaveData as any)?.subject as string) || 'General';
       const fromDateStr = (leaveData as any)?.fromDate as string | undefined;
 
-      if (year && sem && div && fromDateStr) {
-        // Use fromDate as the folder date. If a range is needed, we can extend later.
+      if (year && sem && div && fromDateStr && userId) {
         const dateObj = new Date(fromDateStr);
         const batch = getBatchYear(year);
-        const dept = department || DEPARTMENTS.CSE;
         
+        // Auto-detect department if not provided
+        let dept = department;
+        if (!dept) {
+          dept = await autoDetectDepartment(userId, 'student');
+          console.log(`[createLeaveRequest] Auto-detected department for student ${userId}: ${dept}`);
+        } else {
+          dept = getDepartment({ department: dept });
+        }
+        
+        // Get department faculty for leave approval
+        const departmentFaculty = await getDepartmentFaculty(dept);
+        const departmentHead = await getDepartmentHead(dept);
+        
+        // Assign to department head if available, otherwise to first faculty member
+        const assignedTo = departmentHead || (departmentFaculty.length > 0 ? departmentFaculty[0] : null);
+        
+        // Update leave request with department and assigned faculty
+        await updateDoc(docRef, {
+          department: dept,
+          assignedTo: assignedTo ? {
+            id: assignedTo.id,
+            name: assignedTo.name,
+            email: assignedTo.email,
+            role: assignedTo.isDepartmentHead ? 'Department Head' : 'Faculty'
+          } : null,
+          departmentFaculty: departmentFaculty.map(f => ({
+            id: f.id,
+            name: f.name,
+            email: f.email,
+            role: f.isDepartmentHead ? 'Department Head' : 'Faculty'
+          })),
+          updatedAt: serverTimestamp()
+        });
+        
+        // Mirror to department-based structure
         const hierPath = buildBatchPath.leave(batch, dept, sem, div, subject, dateObj);
         const hierRef = doc(collection(db, hierPath), docRef.id);
         await setDoc(hierRef, {
@@ -660,16 +1245,73 @@ export const leaveService = {
           id: docRef.id,
           batchYear: batch,
           department: dept,
+          assignedTo: assignedTo ? {
+            id: assignedTo.id,
+            name: assignedTo.name,
+            email: assignedTo.email,
+            role: assignedTo.isDepartmentHead ? 'Department Head' : 'Faculty'
+          } : null,
+          departmentFaculty: departmentFaculty.map(f => ({
+            id: f.id,
+            name: f.name,
+            email: f.email,
+            role: f.isDepartmentHead ? 'Department Head' : 'Faculty'
+          }))
         });
+        
+        console.log(`[createLeaveRequest] Leave request assigned to department ${dept}, faculty: ${assignedTo?.name || 'No faculty found'}`);
         console.log('[createLeaveRequest] Mirrored leave to department-based path:', hierPath, 'id:', docRef.id);
+        
+        // Create notification for assigned faculty
+        if (assignedTo) {
+          await this.createLeaveNotification(assignedTo.id, docRef.id, leaveData, dept);
+        }
       } else {
-        console.warn('[createLeaveRequest] Skipped department-based mirror (missing year/sem/div or fromDate)');
+        console.warn('[createLeaveRequest] Skipped department assignment (missing year/sem/div/fromDate or userId)');
       }
-    } catch (mirrorError) {
-      console.error('[createLeaveRequest] Failed to mirror leave to department-based structure:', mirrorError);
-      // Do not fail creation if mirror fails
+    } catch (error) {
+      console.error('[createLeaveRequest] Error in department assignment:', error);
+      // Do not fail creation if department assignment fails
     }
+    
     return docRef.id;
+  },
+
+  // Create notification for leave request assignment
+  async createLeaveNotification(
+    facultyId: string, 
+    leaveId: string, 
+    leaveData: any, 
+    department: string
+  ): Promise<void> {
+    try {
+      const notificationData = {
+        userId: facultyId,
+        type: 'leave_request',
+        title: 'New Leave Request',
+        message: `New leave request from ${leaveData.studentName || 'Student'} (${leaveData.rollNumber || leaveData.userId}) in ${getDepartmentDisplayName(department)} department`,
+        data: {
+          leaveId: leaveId,
+          studentId: leaveData.userId,
+          studentName: leaveData.studentName,
+          rollNumber: leaveData.rollNumber,
+          department: department,
+          fromDate: leaveData.fromDate,
+          toDate: leaveData.toDate,
+          reason: leaveData.reason
+        },
+        read: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      const notificationRef = collection(db, COLLECTIONS.NOTIFICATIONS);
+      await addDoc(notificationRef, notificationData);
+      
+      console.log(`[createLeaveNotification] Notification created for faculty ${facultyId} for leave request ${leaveId}`);
+    } catch (error) {
+      console.error('[createLeaveNotification] Error creating notification:', error);
+    }
   },
 
   // Get leave request by ID
@@ -693,6 +1335,53 @@ export const leaveService = {
     const querySnapshot = await getDocs(q);
     
     // Sort in memory to avoid composite index requirement
+    const requests = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as LeaveRequest[];
+    
+    // Sort by createdAt descending (most recent first)
+    return requests.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+      return bTime.getTime() - aTime.getTime();
+    });
+  },
+
+  // Get leave requests assigned to department faculty
+  async getLeaveRequestsByFaculty(facultyId: string): Promise<LeaveRequest[]> {
+    const leaveRef = collection(db, COLLECTIONS.LEAVE_REQUESTS);
+    const q = query(
+      leaveRef, 
+      where('assignedTo.id', '==', facultyId)
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const requests = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as LeaveRequest[];
+    
+    // Sort by createdAt descending (most recent first)
+    return requests.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+      return bTime.getTime() - aTime.getTime();
+    });
+  },
+
+
+
+  // Get pending leave requests for department faculty
+  async getPendingLeaveRequestsByFaculty(facultyId: string): Promise<LeaveRequest[]> {
+    const leaveRef = collection(db, COLLECTIONS.LEAVE_REQUESTS);
+    const q = query(
+      leaveRef, 
+      where('assignedTo.id', '==', facultyId),
+      where('status', '==', 'pending')
+    );
+    const querySnapshot = await getDocs(q);
+    
     const requests = querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -2000,6 +2689,215 @@ export const realtimeService = {
     });
   }
 }; 
+
+// Roll Number Change Management Service
+export const rollNumberChangeService = {
+  // Get roll number change history for a student
+  async getRollNumberHistory(userId: string): Promise<any[]> {
+    try {
+      const mappingRef = doc(db, 'rollNumberMappings', userId);
+      const mappingDoc = await getDoc(mappingRef);
+      
+      if (mappingDoc.exists()) {
+        return [mappingDoc.data()];
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('[rollNumberChangeService] Error getting roll number history:', error);
+      return [];
+    }
+  },
+
+  // Get all students with roll number changes
+  async getAllRollNumberChanges(): Promise<any[]> {
+    try {
+      const mappingsSnapshot = await getDocs(collection(db, 'rollNumberMappings'));
+      return mappingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+    } catch (error) {
+      console.error('[rollNumberChangeService] Error getting all roll number changes:', error);
+      return [];
+    }
+  },
+
+  // Search records by old roll number
+  async searchByOldRollNumber(oldRollNumber: string): Promise<any> {
+    try {
+      const results: {
+        attendance: any[];
+        leaves: any[];
+        notifications: any[];
+        auditLogs: any[];
+      } = {
+        attendance: [],
+        leaves: [],
+        notifications: [],
+        auditLogs: []
+      };
+
+      // Search in main collections
+      const attendanceQuery = query(
+        collection(db, COLLECTIONS.ATTENDANCE),
+        where('previousRollNumber', '==', oldRollNumber)
+      );
+      const attendanceSnapshot = await getDocs(attendanceQuery);
+      results.attendance = attendanceSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const leaveQuery = query(
+        collection(db, COLLECTIONS.LEAVE_REQUESTS),
+        where('previousRollNumber', '==', oldRollNumber)
+      );
+      const leaveSnapshot = await getDocs(leaveQuery);
+      results.leaves = leaveSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const notificationQuery = query(
+        collection(db, COLLECTIONS.NOTIFICATIONS),
+        where('previousRollNumber', '==', oldRollNumber)
+      );
+      const notificationSnapshot = await getDocs(notificationQuery);
+      results.notifications = notificationSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      const auditQuery = query(
+        collection(db, COLLECTIONS.AUDIT_LOGS),
+        where('previousRollNumber', '==', oldRollNumber)
+      );
+      const auditSnapshot = await getDocs(auditQuery);
+      results.auditLogs = auditSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      return results;
+    } catch (error) {
+      console.error('[rollNumberChangeService] Error searching by old roll number:', error);
+      return { attendance: [], leaves: [], notifications: [], auditLogs: [] };
+    }
+  },
+
+  // Get complete student history including roll number changes
+  async getCompleteStudentHistory(userId: string, currentRollNumber: string): Promise<any> {
+    try {
+      const history: {
+        currentRollNumber: string;
+        rollNumberChanges: any[];
+        attendance: any[];
+        leaves: any[];
+        notifications: any[];
+        auditLogs: any[];
+      } = {
+        currentRollNumber: currentRollNumber,
+        rollNumberChanges: [],
+        attendance: [],
+        leaves: [],
+        notifications: [],
+        auditLogs: []
+      };
+
+      // Get roll number change history
+      history.rollNumberChanges = await this.getRollNumberHistory(userId);
+
+      // Get all attendance records (current and previous roll numbers)
+      const attendanceQuery = query(
+        collection(db, COLLECTIONS.ATTENDANCE),
+        where('userId', '==', userId)
+      );
+      const attendanceSnapshot = await getDocs(attendanceQuery);
+      history.attendance = attendanceSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Get all leave records
+      const leaveQuery = query(
+        collection(db, COLLECTIONS.LEAVE_REQUESTS),
+        where('userId', '==', userId)
+      );
+      const leaveSnapshot = await getDocs(leaveQuery);
+      history.leaves = leaveSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Get all notification records
+      const notificationQuery = query(
+        collection(db, COLLECTIONS.NOTIFICATIONS),
+        where('userId', '==', userId)
+      );
+      const notificationSnapshot = await getDocs(notificationQuery);
+      history.notifications = notificationSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Get all audit log records
+      const auditQuery = query(
+        collection(db, COLLECTIONS.AUDIT_LOGS),
+        where('userId', '==', userId)
+      );
+      const auditSnapshot = await getDocs(auditQuery);
+      history.auditLogs = auditSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      return history;
+    } catch (error) {
+      console.error('[rollNumberChangeService] Error getting complete student history:', error);
+      return {
+        currentRollNumber: currentRollNumber,
+        rollNumberChanges: [],
+        attendance: [],
+        leaves: [],
+        notifications: [],
+        auditLogs: []
+      };
+    }
+  },
+
+  // Export student history with roll number changes
+  async exportStudentHistoryWithRollNumberChanges(
+    userId: string,
+    currentRollNumber: string,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      const history = await this.getCompleteStudentHistory(userId, currentRollNumber);
+      
+      if (!history.attendance.length && !history.leaves.length) {
+        return {
+          success: false,
+          message: 'No historical data found for this student'
+        };
+      }
+
+      const filename = `student_history_${currentRollNumber}_${new Date().toISOString().split('T')[0]}.${format}`;
+      
+      return {
+        success: true,
+        data: history,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('[rollNumberChangeService] Error exporting student history:', error);
+      return {
+        success: false,
+        message: `Export failed: ${(error as any).message}`
+      };
+    }
+  }
+};
 
 // Batch Migration Service with Department Support
 export const batchMigrationService = {

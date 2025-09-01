@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import LoginForm from './components/Auth/LoginForm';
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
+import Footer from './components/Layout/Footer';
 import MobileBottomNav from './components/Layout/MobileBottomNav';
 import Dashboard from './components/Dashboard/Dashboard';
 import LeaveRequestForm from './components/Leave/LeaveRequestForm';
@@ -458,6 +459,9 @@ const AppContent: React.FC = () => {
             {renderPage()}
           </div>
         </main>
+
+        {/* Footer */}
+        <Footer />
       </div>
 
       {/* Mobile Bottom Navigation */}

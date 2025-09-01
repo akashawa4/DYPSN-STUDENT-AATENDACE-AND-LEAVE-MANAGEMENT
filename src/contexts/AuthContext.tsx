@@ -22,105 +22,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demo
-const mockUsers: User[] = [
-  {
-    id: 'student001',
-    name: 'Demo Student',
-    email: 'student.demo@dypsn.edu',
-    role: 'student',
-    department: 'CSE',
-    accessLevel: 'basic',
-    isActive: true,
-    phone: '+91 90000 00001',
-    rollNumber: 'STU001',
-    year: '2',
-    sem: '3',
-    div: 'A',
-    joiningDate: '2022-08-01',
-    designation: 'Student',
-    gender: 'Male'
-  },
-  {
-    id: 'student002',
-    name: 'Demo Student 2',
-    email: 'student2.demo@dypsn.edu',
-    role: 'student',
-    department: 'CSE',
-    accessLevel: 'basic',
-    isActive: true,
-    phone: '+91 90000 00002',
-    rollNumber: 'STU002',
-    year: '2',
-    sem: '3',
-    div: 'A',
-    joiningDate: '2022-08-01',
-    designation: 'Student',
-    gender: 'Female'
-  },
-  {
-    id: 'student003',
-    name: 'Demo Student 3',
-    email: 'student3.demo@dypsn.edu',
-    role: 'student',
-    department: 'CSE',
-    accessLevel: 'basic',
-    isActive: true,
-    phone: '+91 90000 00003',
-    rollNumber: 'STU003',
-    year: '3',
-    sem: '5',
-    div: 'B',
-    joiningDate: '2021-08-01',
-    designation: 'Student',
-    gender: 'Male'
-  },
-  {
-    id: 'student004',
-    name: 'Demo Student 4',
-    email: 'student4.demo@dypsn.edu',
-    role: 'student',
-    department: 'CSE',
-    accessLevel: 'basic',
-    isActive: true,
-    phone: '+91 90000 00004',
-    rollNumber: 'STU004',
-    year: '4',
-    sem: '7',
-    div: 'A',
-    joiningDate: '2020-08-01',
-    designation: 'Student',
-    gender: 'Female'
-  },
-  {
-    id: 'teacher001',
-    name: 'Demo Teacher',
-    email: 'teacher.demo@dypsn.edu',
-    role: 'teacher',
-    department: 'CSE',
-    accessLevel: 'approver',
-    isActive: true,
-    phone: '+91 90000 00005',
-    rollNumber: 'TCH001',
-    joiningDate: '2020-01-15',
-    designation: 'Assistant Professor',
-    gender: 'Female'
-  },
-  {
-    id: 'hod001',
-    name: 'Demo HOD',
-    email: 'hod.demo@dypsn.edu',
-    role: 'hod',
-    department: 'CSE',
-    accessLevel: 'full',
-    isActive: true,
-    phone: '+91 90000 00006',
-    rollNumber: 'HOD001',
-    joiningDate: '2018-06-01',
-    designation: 'Head of Department',
-    gender: 'Male'
-  }
-];
+// Default HOD user
+const defaultHOD: User = {
+  id: 'hod001',
+  name: 'HOD CSE',
+  email: 'hodcse@gmail.com',
+  role: 'hod',
+  department: 'CSE',
+  accessLevel: 'full',
+  isActive: true,
+  phone: '+91 98765 43210',
+  rollNumber: 'HOD001',
+  joiningDate: '2020-01-01',
+  designation: 'Head of Department',
+  gender: 'Male',
+  year: '1',
+  sem: '1',
+  div: 'A'
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -128,39 +47,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Ensure all demo users are in Firestore on app start
-    const ensureDemoUsers = async () => {
+    // Ensure default HOD user is in Firestore on app start
+    const ensureDefaultHOD = async () => {
       try {
-        // Create all demo user operations in parallel using Promise.all - much faster!
-        const demoUserPromises = mockUsers.map(async (demoUser) => {
-          try {
-            const existingUser = await userService.getUser(demoUser.id);
-            if (!existingUser) {
-              console.log('[AuthContext] Creating demo user in Firestore on app start:', demoUser.email);
-              await userService.createUser({
-                ...demoUser,
-                createdAt: new Date().toISOString(),
-                lastLogin: new Date().toISOString(),
-                loginCount: 0
-              });
-              return `Created: ${demoUser.email}`;
-            }
-            return `Exists: ${demoUser.email}`;
-          } catch (error) {
-            console.error(`[AuthContext] Error with demo user ${demoUser.email}:`, error);
-            return `Error: ${demoUser.email}`;
-          }
-        });
-        
-        // Execute all operations in parallel
-        const results = await Promise.all(demoUserPromises);
-        console.log('[AuthContext] Initial demo users setup completed:', results);
+        const existingUser = await userService.getUser(defaultHOD.id);
+        if (!existingUser) {
+          console.log('[AuthContext] Creating default HOD user in Firestore on app start:', defaultHOD.email);
+          await userService.createUser({
+            ...defaultHOD,
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString(),
+            loginCount: 0
+          });
+          console.log('[AuthContext] Default HOD user created successfully');
+        } else {
+          console.log('[AuthContext] Default HOD user already exists in Firestore');
+        }
       } catch (error) {
-        console.error('[AuthContext] Error ensuring demo users on app start:', error);
+        console.error('[AuthContext] Error ensuring default HOD user on app start:', error);
       }
     };
     
-    ensureDemoUsers();
+    ensureDefaultHOD();
 
     // Listen for Firebase Auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -215,35 +123,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      // First check if it's a demo user
-      const foundDemoUser = mockUsers.find(u => u.email === email);
-      if (foundDemoUser) {
-        // Demo user login
-        console.log('[AuthContext] Demo user login:', foundDemoUser.email);
+      // First check if it's the default HOD user
+      if (email === defaultHOD.email && password === 'hodcse2025@attendance') {
+        console.log('[AuthContext] Default HOD login:', defaultHOD.email);
         
         // Check if user already exists in Firestore
-        const existingDemoUser = await userService.getUser(foundDemoUser.id);
+        const existingHOD = await userService.getUser(defaultHOD.id);
         
-        if (existingDemoUser) {
-          console.log('[AuthContext] Updating existing user:', foundDemoUser.id);
+        if (existingHOD) {
+          console.log('[AuthContext] Updating existing HOD user:', defaultHOD.id);
           // Update existing user with new login info
-          await userService.updateUser(foundDemoUser.id, {
+          await userService.updateUser(defaultHOD.id, {
             lastLogin: new Date().toISOString(),
-            loginCount: (existingDemoUser.loginCount || 0) + 1
+            loginCount: (existingHOD.loginCount || 0) + 1
           });
         } else {
-          console.log('[AuthContext] Creating new user in Firestore:', foundDemoUser.id);
+          console.log('[AuthContext] Creating new HOD user in Firestore:', defaultHOD.id);
           // Create new user in Firestore
           await userService.createUser({
-            ...foundDemoUser,
+            ...defaultHOD,
             lastLogin: new Date().toISOString(),
             loginCount: 1,
             createdAt: new Date().toISOString()
           });
         }
-        console.log('[AuthContext] User data saved to Firestore successfully');
-        setUser(foundDemoUser);
-        localStorage.setItem('dypsn_user', JSON.stringify(foundDemoUser));
+        console.log('[AuthContext] HOD user data saved to Firestore successfully');
+        setUser(defaultHOD);
+        localStorage.setItem('dypsn_user', JSON.stringify(defaultHOD));
         return;
       }
 
@@ -354,37 +260,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const ensureDemoUsersInFirestore = async () => {
-    console.log('[AuthContext] Ensuring all demo users are in Firestore...');
+    console.log('[AuthContext] Ensuring default HOD user is in Firestore...');
     try {
-      // Create all demo user operations in parallel using Promise.all - much faster!
-      const demoUserPromises = mockUsers.map(async (demoUser) => {
-        try {
-          const existingUser = await userService.getUser(demoUser.id);
-          if (!existingUser) {
-            console.log('[AuthContext] Creating demo user in Firestore:', demoUser.email);
-            await userService.createUser({
-              ...demoUser,
-              createdAt: new Date().toISOString(),
-              lastLogin: new Date().toISOString(),
-              loginCount: 0
-            });
-            return `Created: ${demoUser.email}`;
-          } else {
-            console.log('[AuthContext] Demo user already exists in Firestore:', demoUser.email);
-            return `Exists: ${demoUser.email}`;
-          }
-        } catch (error) {
-          console.error(`[AuthContext] Error with demo user ${demoUser.email}:`, error);
-          return `Error: ${demoUser.email}`;
-        }
-      });
-      
-      // Execute all operations in parallel
-      const results = await Promise.all(demoUserPromises);
-      console.log('[AuthContext] All demo users processed:', results);
-      console.log('[AuthContext] All demo users ensured in Firestore');
+      const existingUser = await userService.getUser(defaultHOD.id);
+      if (!existingUser) {
+        console.log('[AuthContext] Creating default HOD user in Firestore:', defaultHOD.email);
+        await userService.createUser({
+          ...defaultHOD,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          loginCount: 0
+        });
+        console.log('[AuthContext] Default HOD user created successfully');
+      } else {
+        console.log('[AuthContext] Default HOD user already exists in Firestore');
+      }
     } catch (error) {
-      console.error('[AuthContext] Error ensuring demo users in Firestore:', error);
+      console.error('[AuthContext] Error ensuring default HOD user in Firestore:', error);
     }
   };
 

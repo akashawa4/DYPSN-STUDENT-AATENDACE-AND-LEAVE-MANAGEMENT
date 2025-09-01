@@ -5,6 +5,21 @@ import { useAuth } from '../../contexts/AuthContext';
 import { leaveService, attendanceService, userService } from '../../firebase/firestore';
 import { Calendar, Users, TrendingUp, Clock, Plus, Eye, Bell, FileText, GraduationCap } from 'lucide-react';
 
+// Helper function to get greeting based on time of day
+const getGreeting = (): string => {
+  const hour = new Date().getHours();
+  
+  if (hour >= 5 && hour < 12) {
+    return 'Good morning';
+  } else if (hour >= 12 && hour < 17) {
+    return 'Good afternoon';
+  } else if (hour >= 17 && hour < 21) {
+    return 'Good evening';
+  } else {
+    return 'Good night';
+  }
+};
+
 import TakeAttendancePanel from '../Attendance/TakeAttendancePanel';
 import StudentManagementPanel from '../StudentManagement/StudentManagementPanel';
 import TeacherStudentPanel from '../StudentManagement/TeacherStudentPanel';
@@ -24,6 +39,7 @@ interface StudentData {
 
 const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
   const { user } = useAuth();
+  const [currentGreeting, setCurrentGreeting] = useState(getGreeting());
   const [dashboardData, setDashboardData] = useState({
     attendance: { present: 0, total: 0, percentage: 0 },
     leaveBalance: { total: 0, casual: 0, sick: 0 },
@@ -35,6 +51,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
   const [loading, setLoading] = useState(true);
   const [showStudentManagement, setShowStudentManagement] = useState(false);
   const [showTeacherManagement, setShowTeacherManagement] = useState(false);
+
+  // Update greeting periodically
+  useEffect(() => {
+    const updateGreeting = () => {
+      setCurrentGreeting(getGreeting());
+    };
+
+    // Update greeting every minute
+    const interval = setInterval(updateGreeting, 60000);
+    
+    // Initial update
+    updateGreeting();
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -214,7 +245,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
           <div className="mb-4 lg:mb-0">
             <h1 className="text-2xl lg:text-3xl font-bold text-gray-900 mb-2">
-              Good morning, {user?.name?.split(' ')[0]}! 👋
+              {currentGreeting}, {user?.name?.split(' ')[0]}! 👋
             </h1>
             <p className="text-gray-600 text-base lg:text-lg">
               {user?.accessLevel === 'full' 
