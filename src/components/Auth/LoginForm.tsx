@@ -79,7 +79,7 @@ const LoginForm: React.FC = () => {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Students: Use your phone number as password
+                  Students & Teachers: Use your phone number as password
                   <br />
                   <span className="text-blue-600">Format: 10-digit number (e.g., 9876543210)</span>
                 </p>

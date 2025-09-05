@@ -181,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Check teacher login result
       if (teacherResult) {
-        console.log('[AuthContext] Teacher login with phone number:', teacherResult.email);
+        console.log('[AuthContext] Teacher login successful:', teacherResult.email);
         await userService.updateUser(teacherResult.id, {
           lastLogin: new Date().toISOString(),
           loginCount: (teacherResult.loginCount || 0) + 1
@@ -189,6 +189,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(teacherResult);
         localStorage.setItem('dypsn_user', JSON.stringify(teacherResult));
         return;
+      } else {
+        console.log('[AuthContext] Teacher validation returned null for:', email);
       }
 
       // Try regular Firebase authentication for teachers/HODs

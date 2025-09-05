@@ -1039,46 +1039,246 @@ export const userService = {
 
   // Validate teacher credentials (email and phone number)
   async validateTeacherCredentials(email: string, phoneNumber: string): Promise<User | null> {
-    // Prefer teachers collection
-    const teachersRef = collection(db, COLLECTIONS.TEACHERS);
-    const tq = query(teachersRef, where('email', '==', email));
-    const tSnap = await getDocs(tq);
-    let teacherDoc: { id: string; data: any } | null = null;
-    if (!tSnap.empty) {
-      const doc0 = tSnap.docs[0];
-      teacherDoc = { id: doc0.id, data: doc0.data() };
-    } else {
-      // Fallback to users where role==teacher
-      const usersRef = collection(db, COLLECTIONS.USERS);
-      const uq = query(usersRef, where('email', '==', email), where('role', '==', 'teacher'));
-      const uSnap = await getDocs(uq);
-      if (uSnap.empty) return null;
-      const doc0 = uSnap.docs[0];
-      teacherDoc = { id: doc0.id, data: doc0.data() };
-    }
-
-    const teacher = teacherDoc!.data as User;
-    const teacherPhone = teacher.phone || '';
+    console.log(`🔍 Searching for teacher with email: ${email}, phone: ${phoneNumber}`);
     
-    // Only proceed if teacher has a phone number
-    if (!teacherPhone) {
-      console.log(`Teacher ${teacher.email} has no phone number`);
+    try {
+      // Clean the email to remove any trailing spaces
+      const cleanEmail = email.trim();
+      console.log(`🔍 Cleaned email: "${cleanEmail}"`);
+      
+      // Debug: List all users in the collection to help identify the issue
+      console.log(`🔍 Debug: Listing all users in users collection...`);
+      const usersRef = collection(db, COLLECTIONS.USERS);
+      const allUsersQuery = query(usersRef, where('role', '==', 'teacher'));
+      const allUsersSnap = await getDocs(allUsersQuery);
+      console.log(`📊 Found ${allUsersSnap.size} teachers in users collection:`);
+      allUsersSnap.docs.forEach(doc => {
+        const data = doc.data();
+        console.log(`  - ${doc.id}: ${data.email} (role: ${data.role})`);
+      });
+      
+      // PRIMARY: Check users collection first (as per requirement)
+      console.log(`🔍 Step 1: Checking users collection for teacher...`);
+      
+      // First try direct document access by email as ID
+      const userDocRef = doc(usersRef, cleanEmail);
+      const userDocSnap = await getDoc(userDocRef);
+      
+      if (userDocSnap.exists()) {
+        const userData = userDocSnap.data();
+        console.log(`👤 Found user by document ID:`, {
+          id: userDocSnap.id,
+          email: userData.email,
+          role: userData.role,
+          name: userData.name,
+          phone: userData.phone
+        });
+        
+        if (userData.role === 'teacher') {
+          console.log(`✅ User has teacher role, validating phone number...`);
+          
+          // Validate phone number
+          const teacherPhone = userData.phone || '';
+          console.log(`📞 Teacher phone: "${teacherPhone}", Input phone: "${phoneNumber}"`);
+          
+          if (!teacherPhone) {
+            console.log(`❌ Teacher has no phone number`);
+            return null;
+          }
+          
+          const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
+          const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
+          
+          console.log(`📞 Normalized teacher phone: "${normalizedTeacherPhone}", Normalized input phone: "${normalizedInputPhone}"`);
+          
+          if (
+            normalizedTeacherPhone === normalizedInputPhone ||
+            teacherPhone === phoneNumber ||
+            teacherPhone.endsWith(phoneNumber) ||
+            phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
+          ) {
+            console.log(`✅ Teacher phone number matches! Authentication successful.`);
+            const { id: _ignoredTId, ...teacherRest } = userData as any;
+            return { id: userDocSnap.id, ...teacherRest };
+          } else {
+            console.log(`❌ Teacher phone number does not match`);
+            return null;
+          }
+        } else {
+          console.log(`❌ User found but role is "${userData.role}", not "teacher"`);
+          return null;
+        }
+      } else {
+        console.log(`❌ No document found with ID: ${cleanEmail}`);
+        
+        // Fallback: Search by email field using query
+        console.log(`🔍 Fallback: Searching by email field in users collection...`);
+        const emailQuery = query(usersRef, where('email', '==', cleanEmail), where('role', '==', 'teacher'));
+        const emailQuerySnap = await getDocs(emailQuery);
+        
+        console.log(`📊 Email field query result: ${emailQuerySnap.size} documents found`);
+        
+        if (!emailQuerySnap.empty) {
+          const doc = emailQuerySnap.docs[0];
+          const userData = doc.data();
+          console.log(`👤 Found user by email field:`, {
+            id: doc.id,
+            email: userData.email,
+            role: userData.role,
+            name: userData.name,
+            phone: userData.phone
+          });
+          
+          if (userData.role === 'teacher') {
+            console.log(`✅ User has teacher role, validating phone number...`);
+            
+            // Validate phone number
+            const teacherPhone = userData.phone || '';
+            console.log(`📞 Teacher phone: "${teacherPhone}", Input phone: "${phoneNumber}"`);
+            
+            if (!teacherPhone) {
+              console.log(`❌ Teacher has no phone number`);
+              return null;
+            }
+            
+            const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
+            const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
+            
+            console.log(`📞 Normalized teacher phone: "${normalizedTeacherPhone}", Normalized input phone: "${normalizedInputPhone}"`);
+            
+            if (
+              normalizedTeacherPhone === normalizedInputPhone ||
+              teacherPhone === phoneNumber ||
+              teacherPhone.endsWith(phoneNumber) ||
+              phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
+            ) {
+              console.log(`✅ Teacher phone number matches! Authentication successful.`);
+              const { id: _ignoredTId, ...teacherRest } = userData as any;
+              return { id: doc.id, ...teacherRest };
+            } else {
+              console.log(`❌ Teacher phone number does not match`);
+              return null;
+            }
+          } else {
+            console.log(`❌ User found but role is "${userData.role}", not "teacher"`);
+            return null;
+          }
+        } else {
+          console.log(`❌ No teacher found with email: ${cleanEmail}`);
+          
+          // Final fallback: Search through all teachers we found earlier
+          console.log(`🔍 Final fallback: Searching through known teachers...`);
+          const allTeachersQuery = query(usersRef, where('role', '==', 'teacher'));
+          const allTeachersSnap = await getDocs(allTeachersQuery);
+          
+          console.log(`📊 All teachers query result: ${allTeachersSnap.size} documents found`);
+          
+          for (const doc of allTeachersSnap.docs) {
+            const userData = doc.data();
+            console.log(`🔍 Checking teacher: ${doc.id} - email: "${userData.email}"`);
+            
+            // Check if email matches (with trimming)
+            const docEmail = (userData.email || '').trim();
+            if (docEmail === cleanEmail) {
+              console.log(`✅ Found matching teacher by email comparison:`, {
+                id: doc.id,
+                email: userData.email,
+                role: userData.role,
+                name: userData.name,
+                phone: userData.phone
+              });
+              
+              if (userData.role === 'teacher') {
+                console.log(`✅ User has teacher role, validating phone number...`);
+                
+                // Validate phone number
+                const teacherPhone = userData.phone || '';
+                console.log(`📞 Teacher phone: "${teacherPhone}", Input phone: "${phoneNumber}"`);
+                
+                if (!teacherPhone) {
+                  console.log(`❌ Teacher has no phone number`);
+                  continue;
+                }
+                
+                const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
+                const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
+                
+                console.log(`📞 Normalized teacher phone: "${normalizedTeacherPhone}", Normalized input phone: "${normalizedInputPhone}"`);
+                
+                if (
+                  normalizedTeacherPhone === normalizedInputPhone ||
+                  teacherPhone === phoneNumber ||
+                  teacherPhone.endsWith(phoneNumber) ||
+                  phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
+                ) {
+                  console.log(`✅ Teacher phone number matches! Authentication successful.`);
+                  const { id: _ignoredTId, ...teacherRest } = userData as any;
+                  return { id: doc.id, ...teacherRest };
+                } else {
+                  console.log(`❌ Teacher phone number does not match for ${doc.id}`);
+                }
+              } else {
+                console.log(`❌ User found but role is "${userData.role}", not "teacher"`);
+              }
+            }
+          }
+          
+          console.log(`❌ No matching teacher found after checking all teachers`);
+        }
+      }
+      
+      // FALLBACK: Check teachers collection if not found in users
+      console.log(`🔍 Step 2: Checking teachers collection as fallback...`);
+      const teachersRef = collection(db, COLLECTIONS.TEACHERS);
+      const teacherDocRef = doc(teachersRef, cleanEmail); // Use cleaned email as document ID
+      const teacherDocSnap = await getDoc(teacherDocRef);
+      
+      if (teacherDocSnap.exists()) {
+        const teacherData = teacherDocSnap.data();
+        console.log(`✅ Found teacher in teachers collection by document ID:`, {
+          id: teacherDocSnap.id,
+          email: teacherData.email,
+          role: teacherData.role,
+          name: teacherData.name,
+          phone: teacherData.phone
+        });
+        
+        // Validate phone number
+        const teacherPhone = teacherData.phone || '';
+        console.log(`📞 Teacher phone: "${teacherPhone}", Input phone: "${phoneNumber}"`);
+        
+        if (!teacherPhone) {
+          console.log(`❌ Teacher has no phone number`);
+          return null;
+        }
+        
+        const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
+        const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
+        
+        console.log(`📞 Normalized teacher phone: "${normalizedTeacherPhone}", Normalized input phone: "${normalizedInputPhone}"`);
+        
+        if (
+          normalizedTeacherPhone === normalizedInputPhone ||
+          teacherPhone === phoneNumber ||
+          teacherPhone.endsWith(phoneNumber) ||
+          phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
+        ) {
+          console.log(`✅ Teacher phone number matches! Authentication successful.`);
+          const { id: _ignoredTId, ...teacherRest } = teacherData as any;
+          return { id: teacherDocSnap.id, ...teacherRest };
+        } else {
+          console.log(`❌ Teacher phone number does not match`);
+          return null;
+        }
+      }
+      
+      console.log(`❌ Teacher not found in either collection: ${cleanEmail}`);
+      return null;
+      
+    } catch (error) {
+      console.error(`❌ Error in validateTeacherCredentials:`, error);
       return null;
     }
-    
-    const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
-    const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
-
-    if (
-      normalizedTeacherPhone === normalizedInputPhone ||
-      teacherPhone === phoneNumber ||
-      teacherPhone.endsWith(phoneNumber) ||
-      phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
-    ) {
-      const { id: _ignoredTId, ...teacherRest } = teacher as any;
-      return { id: teacherDoc!.id, ...teacherRest };
-    }
-    return null;
   },
 
   // Bulk import students
