@@ -9,7 +9,7 @@ The Teacher Management System allows HODs (Heads of Department) to manage facult
 - **Personal Details**: Name, email, phone, date of birth, gender, blood group
 - **Academic Information**: Qualification, specialization, experience
 - **Employment Details**: Department, designation, joining date, salary
-- **Contact Information**: Address, emergency contact
+- **Contact Information**: Address
 - **Status Management**: Active/Inactive status
 
 ### 2. Bulk Operations

@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { userService, attendanceService } from '../../firebase/firestore';
 import { User, AttendanceLog } from '../../types';
 import { Users, Search, Filter, Download, Eye, Upload, Plus, Edit, Trash2, Calendar, FileText, BarChart3, X } from 'lucide-react';
+import { getDepartmentCode } from '../../utils/departmentMapping';
 
 interface TeacherStudentPanelProps {
   user: User;
@@ -79,31 +80,23 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      let fetchedStudents = [];
-      try {
-        const organizedStudents = await userService.getStudentsFromOrganizedCollection(selectedYear, selectedSem, selectedDiv);
-        fetchedStudents = organizedStudents;
-      } catch (error) {
-        // Fallback to regular collection if organized collection doesn't exist
-        console.log('Organized collection not found, using regular collection');
-        const allStudents = await userService.getAllStudents();
-        fetchedStudents = allStudents.filter(student =>
-          student.department === user.department &&
-          student.year === selectedYear &&
-          student.sem === selectedSem &&
-          student.div === selectedDiv
-        );
-        // If no students match, show all students for the department
-        if (fetchedStudents.length === 0) {
-          fetchedStudents = allStudents.filter(student =>
-            student.department === user.department
-          );
-        }
-      }
-      // Always filter to only students
-      setStudents(fetchedStudents.filter(s => s.role === 'student'));
+      // Use the new batch structure to get students
+      const batch = '2025'; // Default batch year
+      const department = getDepartmentCode(user.department);
+      
+      
+      const fetchedStudents = await userService.getStudentsByBatchDeptYearSemDiv(
+        batch,
+        department,
+        selectedYear,
+        selectedSem,
+        selectedDiv
+      );
+      
+      setStudents(fetchedStudents);
     } catch (error) {
-      console.error('Error fetching students:', error);
+      // Handle error silently
+      setStudents([]);
     } finally {
       setLoading(false);
     }
@@ -264,7 +257,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             status: student.isActive ? 'Active' : 'Inactive'
           });
           } catch (error) {
-            console.log(`Error processing student ${student.name}:`, error);
+            // Handle error silently
           }
         }
           } else {
@@ -276,14 +269,11 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
         ];
         
                       try {
-          console.log('🚀 Starting ULTRA-FAST parallel export...');
-          console.log(`📊 Exporting data for ${students.length} students, ${allSubjects.length} subjects...`);
           
           // Calculate total queries for progress tracking
           const daysDiff = Math.ceil((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24));
           const totalQueries = allSubjects.length * daysDiff;
           
-          console.log(`🔢 Total queries to execute: ${totalQueries} (${allSubjects.length} subjects × ${daysDiff} days)`);
           
           // Show progress
           setExporting(true);
@@ -328,7 +318,6 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             }
           );
           
-          console.log('✅ ULTRA-FAST export completed! Data received for', Object.keys(batchAttendance).length, 'students');
           
           // Update progress to show completion
           setExportProgress({
@@ -380,7 +369,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
             });
           }
         } catch (error) {
-          console.error('Error in batch attendance export:', error);
+          // Handle error silently
           
           // Check if it's a limit error
           if (error instanceof Error && error.message.includes('Too many')) {
@@ -390,7 +379,6 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
           }
           
           // Fallback to parallel individual queries if batch fails
-          console.log('Falling back to parallel individual queries...');
           
           setExportProgress({
             current: 0,
@@ -414,7 +402,6 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
                     endDateObj
                   );
                 } catch (error) {
-                  console.log(`No attendance data for student ${student.name} in subject ${subject}`);
                   return [];
                 }
               });
@@ -456,7 +443,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
                 status: student.isActive ? 'Active' : 'Inactive'
               };
             } catch (error) {
-              console.log(`Error processing student ${student.name}:`, error);
+              // Handle error silently
               return null;
             }
           });
@@ -637,9 +624,8 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
         loginCount: 0
       };
 
-      // Create in both regular users collection and organized collection
+      // Create student (automatically creates in batch structure)
       batch.push(userService.createUser(student));
-      batch.push(userService.createOrganizedStudentCollection(student));
     }
 
     await Promise.all(batch);
@@ -687,8 +673,8 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
         lastLogin: '',
         loginCount: 0
       };
+      // Create student (automatically creates in batch structure)
       await userService.createUser(student);
-      await userService.createOrganizedStudentCollection(student);
       setShowAddModal(false);
       setNewStudent({
         name: '',

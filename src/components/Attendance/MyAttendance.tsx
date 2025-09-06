@@ -55,7 +55,7 @@ const MyAttendance: React.FC = () => {
         }));
         setAttendanceData(attendanceRecords);
       } catch (error) {
-        console.error('Error loading attendance data:', error);
+        // Handle error silently
       } finally {
         setLoading(false);
       }
@@ -268,7 +268,10 @@ const MyAttendance: React.FC = () => {
         allRows.push(row);
       } else {
         // Teacher/HOD: export all students as before
-        const students = await userService.getStudentsByYearSemDiv(exportYear, exportSem, exportDiv);
+        // Use batch structure to get students
+        const batch = '2025'; // Default batch year
+        const department = 'CSE'; // Default department
+        const students = await userService.getStudentsByBatchDeptYearSemDiv(batch, department, exportYear, exportSem, exportDiv);
         const allLogs = await Promise.all(
           students
             .filter(student => !!student.rollNumber && String(student.rollNumber).trim() !== '')
@@ -324,7 +327,7 @@ const MyAttendance: React.FC = () => {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       saveAs(blob, `attendance_${user?.role === 'student' ? (user?.rollNumber || user?.id || 'student') : 'students'}_${exportYear}_${exportSem}_${exportDiv}_${year}_${month + 1}.csv`);
     } catch (err) {
-      console.error(err);
+      // Handle error silently
       alert('Failed to export attendance.');
     } finally {
       setExporting(false);
@@ -380,7 +383,10 @@ const MyAttendance: React.FC = () => {
         allRows.push(row);
       } else {
         // Teacher/HOD: export all students as before
-        const students = await userService.getStudentsByYearSemDiv(exportYear, exportSem, exportDiv);
+        // Use batch structure to get students
+        const batch = '2025'; // Default batch year
+        const department = 'CSE'; // Default department
+        const students = await userService.getStudentsByBatchDeptYearSemDiv(batch, department, exportYear, exportSem, exportDiv);
         const allLogs = await Promise.all(
           students
             .filter(student => !!student.rollNumber && String(student.rollNumber).trim() !== '')
@@ -442,7 +448,7 @@ const MyAttendance: React.FC = () => {
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       saveAs(blob, `attendance_${user?.role === 'student' ? (user?.rollNumber || user?.id || 'student') : 'students'}_${exportYear}_${exportSem}_${exportDiv}_${customRange.from}_to_${customRange.to}.csv`);
     } catch (err) {
-      console.error(err);
+      // Handle error silently
       alert('Failed to export attendance.');
     } finally {
       setExporting(false);

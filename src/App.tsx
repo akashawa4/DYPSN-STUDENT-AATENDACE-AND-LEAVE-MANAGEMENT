@@ -15,6 +15,7 @@ import Notifications from './components/Notifications/Notifications';
 import StudentManagementPanel from './components/StudentManagement/StudentManagementPanel';
 import TeacherStudentPanel from './components/StudentManagement/TeacherStudentPanel';
 import TeacherManagementPanel from './components/TeacherManagement/TeacherManagementPanel';
+import SubjectManagementPanel from './components/SubjectManagement/SubjectManagementPanel';
 import { Upload, BarChart3, Users, Calendar, FileText } from 'lucide-react';
 import StudentProfile from './components/StudentProfile';
 import TakeAttendancePanel from './components/Attendance/TakeAttendancePanel';
@@ -412,6 +413,8 @@ const AppContent: React.FC = () => {
         );
       case 'teacher-management':
         return <TeacherManagementPanel />;
+      case 'subject-management':
+        return <SubjectManagementPanel />;
       case 'take-attendance':
         return <TakeAttendancePanel addNotification={addNotification} />;
       case 'settings':

@@ -1,21 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Calendar, Users, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { userService, attendanceService } from '../../firebase/firestore';
+import { userService, attendanceService, subjectService } from '../../firebase/firestore';
+import { Subject } from '../../types';
 import { User, AttendanceLog } from '../../types';
 import { saveAs } from 'file-saver';
+import { getDepartmentCode } from '../../utils/departmentMapping';
+import { formatYear, getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
 const YEARS = ['1st', '2nd', '3rd', '4th'];
-const SEMS = ['1', '2', '3', '4', '5', '6', '7', '8'];
 const DIVS = ['A', 'B', 'C', 'D'];
 
-const FIXED_SUBJECTS = [
-  'Software Engineering',
-  'Microprocessor',
-  'Operating System',
-  'Automata',
-  'CN-1'
-];
+// Subjects are loaded dynamically based on selected filters
 
 interface StudentAttendanceData {
   student: User;
@@ -30,6 +26,7 @@ const StudentAttendanceList: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(true);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [students, setStudents] = useState<User[]>([]);
   const [studentAttendanceData, setStudentAttendanceData] = useState<StudentAttendanceData[]>([]);
@@ -39,6 +36,7 @@ const StudentAttendanceList: React.FC = () => {
   const [selectedYear, setSelectedYear] = useState('2nd');
   const [selectedSem, setSelectedSem] = useState('3');
   const [selectedDiv, setSelectedDiv] = useState('A');
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('2'));
   const [selectedSubject, setSelectedSubject] = useState<string>('Software Engineering');
   const [selectedDate, setSelectedDate] = useState<string>('');
   
@@ -48,7 +46,7 @@ const StudentAttendanceList: React.FC = () => {
   const [showCustomRangeInputs, setShowCustomRangeInputs] = useState(false);
   
   // Available subjects
-  const [availableSubjects, setAvailableSubjects] = useState<string[]>(FIXED_SUBJECTS);
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -61,7 +59,33 @@ const StudentAttendanceList: React.FC = () => {
     setSelectedDate(getTodayDate());
   }, []);
 
-  // Load students and their attendance data
+  const normalizeYear = (y: string) => {
+    if (!y) return '';
+    // Convert year format to match new subject structure
+    const yearMapping: { [key: string]: string } = {
+      '1': '1st',
+      '2': '2nd', 
+      '3': '3rd',
+      '4': '4th'
+    };
+    return yearMapping[y] || y;
+  };
+
+  // Handle year change to update available semesters
+  const handleYearChange = (newYear: string) => {
+    setSelectedYear(newYear);
+    const normalizedYear = newYear.replace(/(st|nd|rd|th)/i, '');
+    const newAvailableSemesters = getAvailableSemesters(normalizedYear);
+    setAvailableSemesters(newAvailableSemesters);
+    
+    // If current semester is not valid for new year, reset to first available
+    if (!isValidSemesterForYear(normalizedYear, selectedSem)) {
+      const defaultSem = getDefaultSemesterForYear(normalizedYear);
+      setSelectedSem(defaultSem);
+    }
+  };
+
+  // Load students, subjects and their attendance data
   useEffect(() => {
     const loadStudentAttendance = async () => {
       if (!user || (user.role !== 'teacher' && user.role !== 'hod')) return;
@@ -70,10 +94,39 @@ const StudentAttendanceList: React.FC = () => {
         setLoadingStudents(true);
         setError('');
         
-        // Get students for selected year, sem, div
-        const studentsList = await userService.getStudentsByYearSemDiv(selectedYear, selectedSem, selectedDiv);
+        // Get students for selected year, sem, div from batch structure
+        const batch = '2025'; // Default batch year
+        const department = getDepartmentCode(user.department);
+        
+        
+        const studentsList = await userService.getStudentsByBatchDeptYearSemDiv(
+          batch,
+          department,
+          selectedYear,
+          selectedSem,
+          selectedDiv
+        );
+        
         setStudents(studentsList);
         
+        // Load subjects dynamically for selected filters
+        try {
+          setSubjectsLoading(true);
+          const deptCode = getDepartmentCode(user.department);
+          
+          const subs = await subjectService.getSubjectsByDepartment(deptCode, normalizeYear(selectedYear), selectedSem);
+          
+          const names = subs.map(s => s.subjectName).sort();
+          setAvailableSubjects(names);
+          if (names.length > 0 && !names.includes(selectedSubject)) {
+            setSelectedSubject(names[0]);
+          }
+        } catch (e) {
+          setAvailableSubjects([]);
+        } finally {
+          setSubjectsLoading(false);
+        }
+
         if (studentsList.length === 0) {
           setError(`No students found for ${selectedYear} Year, ${selectedSem} Semester, Division ${selectedDiv}`);
           return;
@@ -85,7 +138,6 @@ const StudentAttendanceList: React.FC = () => {
         }
         
       } catch (error) {
-        console.error('Error loading student attendance data:', error);
         setError('Failed to load students. Please try again.');
       } finally {
         setLoadingStudents(false);
@@ -134,7 +186,6 @@ const StudentAttendanceList: React.FC = () => {
           };
           
         } catch (error) {
-          console.error(`Error loading attendance for student ${student.name}:`, error);
           // Return student with zero attendance if there's an error
           return {
             student,
@@ -152,7 +203,7 @@ const StudentAttendanceList: React.FC = () => {
       setStudentAttendanceData(results);
       
     } catch (error) {
-      console.error('Error loading attendance data:', error);
+      // Handle error silently
     } finally {
       setLoading(false);
     }
@@ -207,7 +258,6 @@ const StudentAttendanceList: React.FC = () => {
       saveAs(blob, `attendance_${selectedYear}_${selectedSem}_${selectedDiv}_${selectedSubject}_${selectedDate}.csv`);
       
     } catch (error) {
-      console.error('Error exporting attendance:', error);
       alert('Failed to export attendance data.');
     } finally {
       setExporting(false);
@@ -285,7 +335,6 @@ const StudentAttendanceList: React.FC = () => {
             presentPercentage: `${presentPercentage}%`
           };
         } catch (error) {
-          console.error(`Error loading month data for student ${student.name}:`, error);
           // Return student with zero attendance if there's an error
           return {
             srNo: index + 1,
@@ -322,7 +371,6 @@ const StudentAttendanceList: React.FC = () => {
       saveAs(blob, `month_report_${selectedYear}_${selectedSem}_${selectedDiv}_${selectedSubject}_${startDate}_to_${endDate}.csv`);
       
     } catch (error) {
-      console.error('Error exporting month report:', error);
       alert('Failed to export month report.');
     } finally {
       setExporting(false);
@@ -405,7 +453,6 @@ const StudentAttendanceList: React.FC = () => {
             presentPercentage: `${presentPercentage}%`
           };
         } catch (error) {
-          console.error(`Error loading custom range data for student ${student.name}:`, error);
           // Return student with zero attendance if there's an error
           return {
             srNo: index + 1,
@@ -442,7 +489,6 @@ const StudentAttendanceList: React.FC = () => {
       saveAs(blob, `custom_range_${selectedYear}_${selectedSem}_${selectedDiv}_${selectedSubject}_${customRangeFrom}_to_${customRangeTo}.csv`);
       
     } catch (error) {
-      console.error('Error exporting custom range report:', error);
       alert('Failed to export custom range report.');
     } finally {
       setExporting(false);
@@ -473,7 +519,7 @@ const StudentAttendanceList: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
             <select 
               value={selectedYear} 
-              onChange={(e) => setSelectedYear(e.target.value)}
+              onChange={(e) => handleYearChange(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2.5 sm:py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
             >
               {YEARS.map(year => (
@@ -489,7 +535,7 @@ const StudentAttendanceList: React.FC = () => {
               onChange={(e) => setSelectedSem(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2.5 sm:py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
             >
-              {SEMS.map(sem => (
+              {availableSemesters.map(sem => (
                 <option key={sem} value={sem}>{sem}</option>
               ))}
             </select>
@@ -515,10 +561,17 @@ const StudentAttendanceList: React.FC = () => {
               onChange={(e) => handleSubjectChange(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2.5 sm:py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
               required
+              disabled={subjectsLoading}
             >
-              {availableSubjects.map(subject => (
-                <option key={subject} value={subject}>{subject}</option>
-              ))}
+              {subjectsLoading ? (
+                <option value="">Loading subjects...</option>
+              ) : availableSubjects.length > 0 ? (
+                availableSubjects.map(subject => (
+                  <option key={subject} value={subject}>{subject}</option>
+                ))
+              ) : (
+                <option value="">No subjects available</option>
+              )}
             </select>
           </div>
 
@@ -618,6 +671,14 @@ const StudentAttendanceList: React.FC = () => {
               <span>{exporting ? 'Exporting...' : 'Export Custom Range'}</span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Loading State for Subjects */}
+      {subjectsLoading && (
+        <div className="text-center py-4 bg-white rounded-lg border border-gray-200">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <p className="text-sm text-gray-600">Loading subjects...</p>
         </div>
       )}
 

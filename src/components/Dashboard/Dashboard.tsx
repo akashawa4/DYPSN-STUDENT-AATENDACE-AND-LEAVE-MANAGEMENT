@@ -114,21 +114,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
         } else if (user.role === 'teacher' || user.role === 'hod') {
           // Load CSE department student data for teachers/HODs only
           try {
-            console.log('Loading student data for teacher/HOD...');
-            const allStudents = await userService.getAllStudents();
-            console.log('All students loaded:', allStudents.length);
-            
-            // Log sample user data to see actual field values
-            const sampleUsers = allStudents.slice(0, 3);
-            console.log('Sample users:', sampleUsers.map(u => ({
-              id: u.id,
-              name: u.name,
-              role: u.role,
-              department: u.department,
-              year: u.year,
-              sem: u.sem,
-              div: u.div
-            })));
+            // Use batch structure to get students
+            const batch = '2025'; // Default batch year
+            const department = 'CSE'; // Default department for teachers/HODs
+            const allStudents = await userService.getStudentsByBatchDeptYearSemDiv(batch, department, '2nd', '3', 'A');
             
             // Filter for CSE students with more flexible matching
             const cseStudents = allStudents.filter(student => {
@@ -148,32 +137,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
                 year.includes('second') || year.includes('third') || year.includes('fourth')
               );
               
-              console.log('Checking student:', student.name, 'Department:', student.department, 'Year:', student.year, 'Role:', student.role, 'Valid:', { isStudent, isCSE, isValidYear });
-              
               return isStudent && isCSE && isValidYear;
             });
-            
-            console.log('CSE students filtered:', cseStudents.length);
-            if (cseStudents.length > 0) {
-              console.log('Sample CSE student:', cseStudents[0]);
-            }
             
             // If no CSE students found, try to find any students with year/sem/div data
             let studentsToUse = cseStudents;
             if (cseStudents.length === 0) {
-              console.log('No CSE students found, looking for any students with year/sem/div data...');
               const studentsWithYearData = allStudents.filter(s => 
                 s.role === 'student' && s.year && s.sem && s.div
               );
-              console.log('Students with year data:', studentsWithYearData.length);
               if (studentsWithYearData.length > 0) {
                 studentsToUse = studentsWithYearData;
-                console.log('Using students with year data instead of CSE filter');
               }
             }
             
             // Group students by year, semester, and division
-            console.log(`Using ${studentsToUse.length} students for display`);
             const groupedData: { [key: string]: any[] } = {};
             studentsToUse.forEach(student => {
               if (student.year && student.sem && student.div) {
@@ -184,7 +162,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
                 groupedData[key].push(student);
               }
             });
-            console.log('Grouped data:', groupedData);
 
             // Convert to array format for easier processing
             const studentDataArray: StudentData[] = Object.entries(groupedData).map(([key, students]) => {
@@ -197,7 +174,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
                 students
               };
             });
-            console.log('Student data array:', studentDataArray);
 
             // Sort by year, then semester, then division
             studentDataArray.sort((a, b) => {
@@ -208,28 +184,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
 
             setStudentData(studentDataArray);
             setTotalStudents(studentsToUse.length);
-            console.log('Final student data set:', studentDataArray);
-            console.log('Total students:', studentsToUse.length);
-            
-            // Additional debugging to ensure state is set correctly
-            console.log('State values being set:');
-            console.log('- studentData:', studentDataArray);
-            console.log('- totalStudents:', studentsToUse.length);
-            
-            // Verify the data structure
-            if (studentDataArray.length > 0) {
-              console.log('First student data item:', studentDataArray[0]);
-              console.log('Students in first group:', studentDataArray[0].students);
-            }
           } catch (error) {
-            console.error('Error loading student data:', error);
             // Set default values to prevent showing wrong data
             setStudentData([]);
             setTotalStudents(0);
           }
         }
       } catch (error) {
-        console.error('Error loading dashboard data:', error);
+        // Handle error silently
       } finally {
         setLoading(false);
       }

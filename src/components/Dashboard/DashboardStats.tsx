@@ -63,18 +63,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
 
-  // Debug logging for props
-  console.log('DashboardStats props:', {
-    dashboardData,
-    loading,
-    studentData,
-    totalStudents,
-    userRole,
-    actualUserRole: user?.role,
-    accessLevel: user?.accessLevel,
-    isHOD: user?.role === 'hod',
-    isTeacher: user?.role === 'teacher'
-  });
 
   // Load user's leave requests for stats
   useEffect(() => {
@@ -85,7 +73,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
         const requests = await leaveService.getLeaveRequestsByUser(user.id);
         setLeaveRequests(requests);
       } catch (error) {
-        console.error('Error loading leave requests for stats:', error);
+        // Handle error silently
       } finally {
         setStatsLoading(false);
       }
@@ -97,12 +85,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
   const calculateStats = () => {
     if (!user) return [];
     
-    console.log('calculateStats called with user:', {
-      role: user.role,
-      accessLevel: user.accessLevel,
-      isHOD: user.role === 'hod',
-      isTeacher: user.role === 'teacher'
-    });
     
     if (user.role === 'student' && dashboardData) {
       // Student stats with real data - only show their own information
@@ -153,7 +135,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     // Only show admin stats for users with full access who are NOT HODs
     if (user.accessLevel === 'full' && user.role !== 'hod') {
       // Admin stats (unchanged)
-      console.log('Showing admin stats for user with full access (not HOD)');
       return [
         {
           id: 'staff',
@@ -196,9 +177,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
 
     // Teacher/HOD stats with real student data - only for teachers/HODs
     if ((user.role === 'teacher' || user.role === 'hod') && studentData && totalStudents !== undefined) {
-      console.log('Showing Teacher/HOD stats with real student data');
-      console.log('Calculating stats with student data:', studentData);
-      console.log('Total students:', totalStudents);
       
       const year2Count = studentData.filter(d => {
         const year = d.year?.toString().toLowerCase();
@@ -215,7 +193,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
         return year === '4' || year?.includes('4') || year?.includes('4th') || year?.includes('fourth');
       }).reduce((sum, d) => sum + d.count, 0);
       
-      console.log('Year counts:', { year2: year2Count, year3: year3Count, year4: year4Count });
       
       return [
         {
@@ -259,7 +236,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
 
     // Fallback Teacher/HOD stats - only show when no student data is available
     if (user.role === 'teacher' || user.role === 'hod') {
-      console.log('Showing fallback Teacher/HOD stats (no student data available)');
       return [
         {
           id: 'students',

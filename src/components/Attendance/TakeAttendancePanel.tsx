@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { userService, attendanceService } from '../../firebase/firestore';
+import { userService, attendanceService, subjectService } from '../../firebase/firestore';
+import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
+import { getDepartmentCode } from '../../utils/departmentMapping';
+import { formatYear, getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
-const YEARS = ['2nd', '3rd', '4th'];
-const SEMS = ['3', '4', '5', '6', '7', '8'];
+const YEARS = ['1st', '2nd', '3rd', '4th'];
 const DIVS = ['A', 'B', 'C'];
-const SUBJECTS = [
-  'Software Engineering',
-  'Microprocessor',
-  'Operating System',
-  'Automata',
-  'CN-1'
-];
+// Subjects are loaded dynamically from Firestore using subjectService
 
 // Add prop type for addNotification
 interface TakeAttendancePanelProps {
@@ -19,10 +15,14 @@ interface TakeAttendancePanelProps {
 }
 
 const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotification }) => {
-  const [year, setYear] = useState('2nd');
-  const [sem, setSem] = useState('3');
+  const { user } = useAuth();
+  const [year, setYear] = useState('1st');
+  const [sem, setSem] = useState('1');
   const [div, setDiv] = useState('A');
-  const [subject, setSubject] = useState(SUBJECTS[0]);
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('1'));
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const [subject, setSubject] = useState<string>('');
   const [presentRolls, setPresentRolls] = useState('');
   const [absentRolls, setAbsentRolls] = useState('');
   const [attendanceMode, setAttendanceMode] = useState<'present' | 'absent' | 'both'>('both');
@@ -38,17 +38,40 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const todayDate = new Date();
   const todayStr = todayDate.toISOString().split('T')[0];
 
+  const normalizeYear = (y: string) => {
+    if (!y) return '';
+    // Convert year format to match new subject structure
+    const yearMapping: { [key: string]: string } = {
+      '1': '1st',
+      '2': '2nd', 
+      '3': '3rd',
+      '4': '4th'
+    };
+    return yearMapping[y] || y;
+  };
+
+  // Handle year change to update available semesters
+  const handleYearChange = (newYear: string) => {
+    setYear(newYear);
+    const normalizedYear = newYear.replace(/(st|nd|rd|th)/i, '');
+    const newAvailableSemesters = getAvailableSemesters(normalizedYear);
+    setAvailableSemesters(newAvailableSemesters);
+    
+    // If current semester is not valid for new year, reset to first available
+    if (!isValidSemesterForYear(normalizedYear, sem)) {
+      const defaultSem = getDefaultSemesterForYear(normalizedYear);
+      setSem(defaultSem);
+    }
+  };
+
   useEffect(() => {
     // Fetch students from Firestore by year, sem, div
     const fetchStudents = async () => {
       setLoading(true);
-      const all = await userService.getAllUsers();
-      const filtered = all.filter(u =>
-        u.role === 'student' &&
-        u.year === year &&
-        u.sem === sem &&
-        u.div === div
-      );
+      // Use batch structure to get students
+      const batch = '2025'; // Default batch year
+      const department = 'CSE'; // Default department
+      const filtered = await userService.getStudentsByBatchDeptYearSemDiv(batch, department, year, sem, div);
       setStudents(filtered);
       setLoading(false);
     };
@@ -61,6 +84,34 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     };
     fetchTeachers();
   }, [year, sem, div]);
+
+  // Load subjects dynamically based on filters (ignore div for subjects)
+  useEffect(() => {
+    const loadSubjects = async () => {
+      try {
+        setSubjectsLoading(true);
+        
+        const deptCode = getDepartmentCode(user?.department);
+        
+        const normalizedYear = normalizeYear(year);
+        const subs = await subjectService.getSubjectsByDepartment(deptCode, normalizedYear, sem);
+        
+        const names = subs.map(s => s.subjectName).sort();
+        setAvailableSubjects(names);
+        if (names.length > 0) {
+          setSubject(prev => (prev && names.includes(prev) ? prev : names[0]));
+        } else {
+          setSubject('');
+        }
+      } catch (e) {
+        setAvailableSubjects([]);
+        setSubject('');
+      } finally {
+        setSubjectsLoading(false);
+      }
+    };
+    loadSubjects();
+  }, [user?.department, year, sem, div]);
 
   const handleMarkAllPresent = () => {
     setPresentRolls(students.map(s => s.rollNumber || s.id).join(','));
@@ -139,7 +190,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
         const isAbsent = finalAbsentList.includes(String(s.rollNumber || s.id));
         
         // If student is not explicitly marked, default to present in present mode, absent in absent mode
-        let status = 'present';
+        let status: 'present' | 'absent' | 'late' | 'half-day' | 'leave' = 'present';
         if (attendanceMode === 'present') {
           status = isPresent ? 'present' : 'absent';
         } else if (attendanceMode === 'absent') {
@@ -158,9 +209,10 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           subject,
           notes: note,
           createdAt: new Date(),
-          year,
-          sem,
-          div,
+          year: s.year || year, // Use student's year if available, fallback to filter year
+          sem: s.sem || sem, // Use student's sem if available, fallback to filter sem
+          div: s.div || div, // Use student's div if available, fallback to filter div
+          studentYear: s.year || year, // Pass student year for batch path
         });
       })
     );
@@ -250,14 +302,14 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Year</label>
-          <select value={year} onChange={e => setYear(e.target.value)} className="mt-1 block w-full border rounded p-2">
+          <select value={year} onChange={e => handleYearChange(e.target.value)} className="mt-1 block w-full border rounded p-2">
             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Semester</label>
           <select value={sem} onChange={e => setSem(e.target.value)} className="mt-1 block w-full border rounded p-2">
-            {SEMS.map(s => <option key={s} value={s}>{s}</option>)}
+            {availableSemesters.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         <div>
@@ -268,8 +320,14 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Subject</label>
-          <select value={subject} onChange={e => setSubject(e.target.value)} className="mt-1 block w-full border rounded p-2">
-            {SUBJECTS.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+          <select value={subject} onChange={e => setSubject(e.target.value)} className="mt-1 block w-full border rounded p-2" disabled={subjectsLoading}>
+            {subjectsLoading ? (
+              <option value="">Loading subjects...</option>
+            ) : availableSubjects.length === 0 ? (
+              <option value="">No subjects</option>
+            ) : (
+              availableSubjects.map(sub => <option key={sub} value={sub}>{sub}</option>)
+            )}
           </select>
         </div>
 

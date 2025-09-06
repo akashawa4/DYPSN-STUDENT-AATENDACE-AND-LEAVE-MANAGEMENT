@@ -1,17 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Calendar, Users, TrendingUp, Clock, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, Calendar, TrendingUp, FileText, CheckCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { attendanceService } from '../../firebase/firestore';
-import { AttendanceLog } from '../../types';
 import { saveAs } from 'file-saver';
-
-const FIXED_SUBJECTS = [
-  'Software Engineering',
-  'Microprocessor',
-  'Operating System',
-  'Automata',
-  'CN-1'
-];
+import { getDepartmentCode } from '../../utils/departmentMapping';
 
 interface StudentAttendanceData {
   date: string;
@@ -31,7 +23,7 @@ const StudentMyAttendance: React.FC = () => {
   const [error, setError] = useState<string>('');
   
   // Filter states
-  const [selectedSubject, setSelectedSubject] = useState<string>('Software Engineering');
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<string>('');
   
   // Custom range states
@@ -39,7 +31,9 @@ const StudentMyAttendance: React.FC = () => {
   const [customRangeTo, setCustomRangeTo] = useState<string>('');
   const [showCustomRangeInputs, setShowCustomRangeInputs] = useState(false);
   
-  const [availableSubjects] = useState<string[]>(FIXED_SUBJECTS);
+  // Dynamic subjects based on student's year and semester
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -47,15 +41,71 @@ const StudentMyAttendance: React.FC = () => {
     return today.toISOString().split('T')[0];
   };
 
+  // Load subjects based on student's year and semester
+  const loadSubjects = async () => {
+    if (!user || user.role !== 'student') return;
+    
+    try {
+      setSubjectsLoading(true);
+      // Get department code for subject query
+      const deptCode = getDepartmentCode(user.department);
+      
+      // Query subjects directly from Firestore using the new path structure
+      // New Path: /subjects/2025/CSE/year/4th/sems/7
+      const { collection, getDocs } = await import('firebase/firestore');
+      const { db } = await import('../../firebase/firebase');
+      
+      const batchYear = '2025'; // Default batch year
+      const collectionPath = `subjects/${batchYear}/${deptCode}/year/${user.year}/sems/${user.sem}`;
+      
+      const subjectsRef = collection(db, collectionPath);
+      const querySnapshot = await getDocs(subjectsRef);
+      
+      // Extract subject names from document data
+      const subjectNames: string[] = [];
+      querySnapshot.docs.forEach(doc => {
+        const docId = doc.id;
+        
+        // Get subject data to find the actual subject name
+        const subjectData = doc.data();
+        const subjectName = subjectData.subjectName || subjectData.name || docId;
+        
+        if (!subjectNames.includes(subjectName)) {
+          subjectNames.push(subjectName);
+        }
+      });
+      setAvailableSubjects(subjectNames);
+      
+      // Set first subject as default if none selected
+      if (subjectNames.length > 0 && !selectedSubject) {
+        setSelectedSubject(subjectNames[0]);
+      } else if (subjectNames.length === 0) {
+        setError(`No subjects found for ${user.year} year, ${user.sem} semester. Please contact your administrator.`);
+      }
+      
+    } catch (error) {
+      setError('Failed to load subjects. Please try again.');
+    } finally {
+      setSubjectsLoading(false);
+    }
+  };
+
   // Set default date to today when component mounts
   useEffect(() => {
     setSelectedDate(getTodayDate());
   }, []);
 
+  // Load subjects when user data is available
+  useEffect(() => {
+    if (user && user.role === 'student') {
+      loadSubjects();
+    }
+  }, [user]);
+
   // Load student's own attendance data
   useEffect(() => {
     const loadStudentAttendance = async () => {
-      if (!user || user.role !== 'student') return;
+      if (!user || user.role !== 'student' || !selectedSubject) return;
       
       try {
         setLoading(true);
@@ -67,7 +117,6 @@ const StudentMyAttendance: React.FC = () => {
         }
         
       } catch (error) {
-        console.error('Error loading student attendance data:', error);
         setError('Failed to load attendance data. Please try again.');
       } finally {
         setLoading(false);
@@ -113,7 +162,6 @@ const StudentMyAttendance: React.FC = () => {
       setStudentAttendanceData([attendanceData]);
       
     } catch (error) {
-      console.error('Error loading attendance data:', error);
       // Set default data if there's an error
       const defaultData: StudentAttendanceData = {
         date: selectedDate,
@@ -177,7 +225,6 @@ const StudentMyAttendance: React.FC = () => {
       saveAs(blob, `my_attendance_${user?.year || '2nd'}_${user?.sem || '3'}_${user?.div || 'A'}_${selectedSubject}_${selectedDate}.csv`);
       
     } catch (error) {
-      console.error('Error exporting attendance:', error);
       alert('Failed to export attendance data.');
     } finally {
       setExporting(false);
@@ -257,21 +304,12 @@ const StudentMyAttendance: React.FC = () => {
       saveAs(blob, `my_month_report_${user?.year || '2nd'}_${user?.sem || '3'}_${user?.div || 'A'}_${selectedSubject}_${startDate}_to_${endDate}.csv`);
       
     } catch (error) {
-      console.error('Error exporting month report:', error);
       alert('Failed to export month report.');
     } finally {
       setExporting(false);
     }
   };
 
-  const handleExportCustomRange = async () => {
-    if (!selectedSubject) {
-      alert('Please select a subject to export custom range report.');
-      return;
-    }
-    
-    setShowCustomRangeInputs(true);
-  };
 
   const handleCustomRangeConfirm = async () => {
     if (!customRangeFrom || !customRangeTo) {
@@ -342,7 +380,6 @@ const StudentMyAttendance: React.FC = () => {
       saveAs(blob, `my_custom_range_${user?.year || '2nd'}_${user?.sem || '3'}_${user?.div || 'A'}_${selectedSubject}_${customRangeFrom}_to_${customRangeTo}.csv`);
       
     } catch (error) {
-      console.error('Error exporting custom range report:', error);
       alert('Failed to export custom range report.');
     } finally {
       setExporting(false);
@@ -364,6 +401,9 @@ const StudentMyAttendance: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Attendance</h1>
         <p className="text-gray-600">Track your personal attendance data</p>
+        <div className="mt-2 text-sm text-gray-500">
+          <span className="font-medium">Student Info:</span> {user.name} | Year: {user.year} | Semester: {user.sem} | Division: {user.div} | Department: {user.department}
+        </div>
       </div>
 
       {/* Filters and Controls */}
@@ -376,11 +416,42 @@ const StudentMyAttendance: React.FC = () => {
               onChange={(e) => handleSubjectChange(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               required
+              disabled={subjectsLoading}
             >
-              {availableSubjects.map(subject => (
-                <option key={subject} value={subject}>{subject}</option>
-              ))}
+              {subjectsLoading ? (
+                <option value="">Loading subjects...</option>
+              ) : availableSubjects.length === 0 ? (
+                <option value="">No subjects available for {user?.year} year, {user?.sem} semester</option>
+              ) : (
+                availableSubjects.map(subject => (
+                  <option key={subject} value={subject}>{subject}</option>
+                ))
+              )}
             </select>
+            {subjectsLoading && (
+              <div className="mt-2 text-sm text-blue-600 flex items-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Loading subjects for {user?.year} year, {user?.sem} semester...
+              </div>
+            )}
+            {!subjectsLoading && availableSubjects.length > 0 && (
+              <div className="mt-2 text-sm text-green-600">
+                Found {availableSubjects.length} subjects for {user?.year} year, {user?.sem} semester
+              </div>
+            )}
+            {!subjectsLoading && availableSubjects.length === 0 && (
+              <div className="mt-2">
+                <div className="text-sm text-red-600 mb-2">
+                  No subjects found for {user?.year} year, {user?.sem} semester
+                </div>
+                <button
+                  onClick={loadSubjects}
+                  className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200"
+                >
+                  Retry Loading Subjects
+                </button>
+              </div>
+            )}
           </div>
 
           <div>

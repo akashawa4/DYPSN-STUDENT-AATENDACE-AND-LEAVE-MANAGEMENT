@@ -52,19 +52,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const existingUser = await userService.getUser(defaultHOD.id);
         if (!existingUser) {
-          console.log('[AuthContext] Creating default HOD user in Firestore on app start:', defaultHOD.email);
           await userService.createUser({
             ...defaultHOD,
             createdAt: new Date().toISOString(),
             lastLogin: new Date().toISOString(),
             loginCount: 0
           });
-          console.log('[AuthContext] Default HOD user created successfully');
-        } else {
-          console.log('[AuthContext] Default HOD user already exists in Firestore');
         }
       } catch (error) {
-        console.error('[AuthContext] Error ensuring default HOD user on app start:', error);
+        // Handle error silently
       }
     };
     
@@ -104,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             localStorage.setItem('dypsn_user', JSON.stringify(basicUserData));
           }
         } catch (error) {
-          console.error('Error fetching user data:', error);
+          // Handle error silently
         }
       } else {
         // Check for stored demo user
@@ -125,20 +121,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       // First check if it's the default HOD user
       if (email === defaultHOD.email && password === 'hodcse2025@attendance') {
-        console.log('[AuthContext] Default HOD login:', defaultHOD.email);
         
         // Check if user already exists in Firestore
         const existingHOD = await userService.getUser(defaultHOD.id);
         
         if (existingHOD) {
-          console.log('[AuthContext] Updating existing HOD user:', defaultHOD.id);
           // Update existing user with new login info
           await userService.updateUser(defaultHOD.id, {
             lastLogin: new Date().toISOString(),
             loginCount: (existingHOD.loginCount || 0) + 1
           });
         } else {
-          console.log('[AuthContext] Creating new HOD user in Firestore:', defaultHOD.id);
           // Create new user in Firestore
           await userService.createUser({
             ...defaultHOD,
@@ -147,22 +140,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: new Date().toISOString()
           });
         }
-        console.log('[AuthContext] HOD user data saved to Firestore successfully');
         setUser(defaultHOD);
         localStorage.setItem('dypsn_user', JSON.stringify(defaultHOD));
         return;
       }
 
       // Run student and teacher validation in parallel using Promise.all - much faster!
-      console.log('[AuthContext] Running parallel validation for student and teacher...');
       
       const [studentResult, teacherResult] = await Promise.all([
         userService.validateStudentCredentials(email, password).catch(error => {
-          console.log('[AuthContext] Student validation error:', error.message);
+          // Handle error silently
           return null;
         }),
         userService.validateTeacherCredentials(email, password).catch(error => {
-          console.log('[AuthContext] Teacher validation error:', error.message);
+          // Handle error silently
           return null;
         })
       ]);

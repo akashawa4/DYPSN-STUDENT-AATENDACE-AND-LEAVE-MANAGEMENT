@@ -274,7 +274,7 @@ const LeaveApprovalPanel: React.FC = () => {
         const requests = await leaveService.getLeaveRequestsByApprover(user?.id || '');
         setLeaveRequests(requests);
       } catch (error) {
-        console.error("Error fetching leave requests:", error);
+        // Handle error silently
         setBanner({ type: 'reject', message: 'Failed to fetch leave requests.' });
         setTimeout(() => setBanner(null), 3000);
       }
@@ -288,8 +288,6 @@ const LeaveApprovalPanel: React.FC = () => {
   const handleApprovalAction = async (action: 'approve' | 'reject' | 'return', remarks?: string) => {
     if (!selectedRequest) return;
 
-    console.log('[LeaveApprovalPanel] Starting approval action:', action, 'for request:', selectedRequest.id);
-    console.log('[LeaveApprovalPanel] Current user:', user);
 
     // Map UI action to backend status
     const statusMap = {
@@ -319,9 +317,8 @@ const LeaveApprovalPanel: React.FC = () => {
       setLeaveRequests(updatedRequests);
     } catch (error) {
       const err = error as any;
-      console.error("[LeaveApprovalPanel] Error updating leave request status:", err);
-      console.error("[LeaveApprovalPanel] Error message:", err.message);
-      console.error("[LeaveApprovalPanel] Error code:", err.code);
+      // Handle error silently
+      // Handle error silently
       
       let errorMessage = 'Failed to update leave request status.';
       if (err.message) {

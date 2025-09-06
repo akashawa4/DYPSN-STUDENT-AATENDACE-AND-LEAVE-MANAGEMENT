@@ -17,13 +17,13 @@ import {
   Clock,
   DollarSign,
   Heart,
-  AlertCircle,
   Download,
   Upload
 } from 'lucide-react';
 import { userService } from '../../firebase/firestore';
 import * as XLSX from 'xlsx';
 import { User as UserType } from '../../types';
+import { getDepartmentCode } from '../../utils/departmentMapping';
 
 interface TeacherFormData {
   name: string;
@@ -37,7 +37,6 @@ interface TeacherFormData {
   joiningDate: string;
   salary: string;
   address: string;
-  emergencyContact: string;
   bloodGroup: string;
   dateOfBirth: string;
   gender: string;
@@ -71,14 +70,22 @@ const TeacherManagementPanel: React.FC = () => {
     joiningDate: '',
     salary: '',
     address: '',
-    emergencyContact: '',
     bloodGroup: '',
     dateOfBirth: '',
     gender: 'Male',
     isActive: true
   });
 
-  const departments = ['CSE', 'IT', 'ECE', 'EEE', 'ME', 'CE', 'AI&ML', 'Data Science'];
+  const departments = [
+    'Computer Science',
+    'Information Technology',
+    'Electronics and Communication',
+    'Electrical and Electronics',
+    'Mechanical Engineering',
+    'Civil Engineering',
+    'Artificial Intelligence & Machine Learning',
+    'Data Science'
+  ];
   const designations = [
     'Assistant Professor',
     'Associate Professor', 
@@ -98,10 +105,20 @@ const TeacherManagementPanel: React.FC = () => {
   const loadTeachers = async () => {
     try {
       setLoading(true);
+      
+      // Try to get teachers from the dedicated teachers collection first
       const teacherUsers = await userService.getAllTeachers();
-      setTeachers(teacherUsers);
+      
+      if (teacherUsers.length === 0) {
+        // Fallback: Get all users with role 'teacher' from users collection
+        const allUsers = await userService.getAllUsers();
+        const teacherUsersFromUsers = allUsers.filter(user => user.role === 'teacher');
+        setTeachers(teacherUsersFromUsers);
+      } else {
+        setTeachers(teacherUsers);
+      }
     } catch (error) {
-      console.error('Error loading teachers:', error);
+      setTeachers([]);
     } finally {
       setLoading(false);
     }
@@ -126,7 +143,6 @@ const TeacherManagementPanel: React.FC = () => {
         joiningDate: formData.joiningDate,
         salary: formData.salary,
         address: formData.address,
-        emergencyContact: formData.emergencyContact,
         bloodGroup: formData.bloodGroup,
         dateOfBirth: formData.dateOfBirth,
         gender: formData.gender,
@@ -137,14 +153,12 @@ const TeacherManagementPanel: React.FC = () => {
 
       if (editingTeacher) {
         await userService.updateTeacher(editingTeacher.id, teacherData);
-        console.log('Teacher updated successfully');
       } else {
         const newTeacherId = `teacher_${Date.now()}`;
         await userService.createTeacher({
           ...teacherData,
           id: newTeacherId
         } as UserType);
-        console.log('Teacher created successfully');
       }
 
       setShowForm(false);
@@ -152,7 +166,7 @@ const TeacherManagementPanel: React.FC = () => {
       resetForm();
       loadTeachers();
     } catch (error) {
-      console.error('Error saving teacher:', error);
+      // Handle error silently
     }
   };
 
@@ -170,7 +184,6 @@ const TeacherManagementPanel: React.FC = () => {
       joiningDate: teacher.joiningDate || '',
       salary: teacher.salary || '',
       address: teacher.address || '',
-      emergencyContact: teacher.emergencyContact || '',
       bloodGroup: teacher.bloodGroup || '',
       dateOfBirth: teacher.dateOfBirth || '',
       gender: teacher.gender || 'Male',
@@ -184,12 +197,11 @@ const TeacherManagementPanel: React.FC = () => {
     
     try {
       await userService.deleteTeacher(teacherToDelete.id);
-      console.log('Teacher deleted successfully');
       setShowDeleteModal(false);
       setTeacherToDelete(null);
       loadTeachers();
     } catch (error) {
-      console.error('Error deleting teacher:', error);
+      // Handle error silently
     }
   };
 
@@ -211,7 +223,6 @@ const TeacherManagementPanel: React.FC = () => {
       joiningDate: '',
       salary: '',
       address: '',
-      emergencyContact: '',
       bloodGroup: '',
       dateOfBirth: '',
       gender: 'Male',
@@ -232,7 +243,6 @@ const TeacherManagementPanel: React.FC = () => {
       'Experience (Years)',
       'Joining Date (YYYY-MM-DD)',
       'Address',
-      'Emergency Contact',
       'Blood Group',
       'Date of Birth (YYYY-MM-DD)',
       'Gender',
@@ -251,7 +261,6 @@ const TeacherManagementPanel: React.FC = () => {
         experience: '6',
         joiningDate: '2020-07-01',
         address: 'Pune, Maharashtra',
-        emergencyContact: '+91 9123456780',
         bloodGroup: 'O+',
         dateOfBirth: '1985-05-12',
         gender: 'Male',
@@ -268,7 +277,6 @@ const TeacherManagementPanel: React.FC = () => {
         experience: '10',
         joiningDate: '2016-08-15',
         address: 'Mumbai, Maharashtra',
-        emergencyContact: '+91 9876501234',
         bloodGroup: 'AB+',
         dateOfBirth: '1982-03-22',
         gender: 'Female',
@@ -285,7 +293,6 @@ const TeacherManagementPanel: React.FC = () => {
         experience: '15',
         joiningDate: '2010-06-01',
         address: 'Delhi, India',
-        emergencyContact: '+91 9123456781',
         bloodGroup: 'B+',
         dateOfBirth: '1978-12-15',
         gender: 'Male',
@@ -307,7 +314,6 @@ const TeacherManagementPanel: React.FC = () => {
         `"${row.experience}"`,
         `"${row.joiningDate}"`,
         `"${row.address}"`,
-        `"${row.emergencyContact}"`,
         `"${row.bloodGroup}"`,
         `"${row.dateOfBirth}"`,
         `"${row.gender}"`,
@@ -328,8 +334,57 @@ const TeacherManagementPanel: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportTeachers = () => {
+    try {
+      // Filter teachers based on current filters
+      const teachersToExport = filteredTeachers;
+      
+      if (teachersToExport.length === 0) {
+        alert('No teachers to export. Please adjust your filters.');
+        return;
+      }
+
+      // Create Excel workbook
+      const workbook = XLSX.utils.book_new();
+      
+      // Prepare data for export
+      const exportData = teachersToExport.map(teacher => ({
+        'Name': teacher.name || '',
+        'Email': teacher.email || '',
+        'Phone': teacher.phone || '',
+        'Department': teacher.department || '',
+        'Designation': teacher.designation || '',
+        'Qualification': teacher.qualification || '',
+        'Specialization': teacher.specialization || '',
+        'Experience': teacher.experience || '',
+        'Joining Date': teacher.joiningDate || '',
+        'Salary': teacher.salary || '',
+        'Address': teacher.address || '',
+        'Blood Group': teacher.bloodGroup || '',
+        'Date of Birth': teacher.dateOfBirth || '',
+        'Gender': teacher.gender || '',
+        'Is Active': teacher.isActive ? 'Yes' : 'No'
+      }));
+
+      // Create worksheet
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Teachers');
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = `teachers_export_${timestamp}.xlsx`;
+      
+      // Download the file
+      XLSX.writeFile(workbook, filename);
+      
+    } catch (error) {
+      alert('Failed to export teachers. Please try again.');
+    }
+  };
+
   const downloadExcelTemplate = () => {
-    console.log('Downloading Excel template...');
     // Create Excel template with proper formatting
     const headers = [
       'Name',
@@ -342,7 +397,6 @@ const TeacherManagementPanel: React.FC = () => {
       'Experience (Years)',
       'Joining Date (YYYY-MM-DD)',
       'Address',
-      'Emergency Contact',
       'Blood Group',
       'Date of Birth (YYYY-MM-DD)',
       'Gender',
@@ -361,7 +415,6 @@ const TeacherManagementPanel: React.FC = () => {
         experience: '6',
         joiningDate: '2020-07-01',
         address: 'Pune, Maharashtra',
-        emergencyContact: '+91 9123456780',
         bloodGroup: 'O+',
         dateOfBirth: '1985-05-12',
         gender: 'Male',
@@ -378,7 +431,6 @@ const TeacherManagementPanel: React.FC = () => {
         experience: '10',
         joiningDate: '2016-08-15',
         address: 'Mumbai, Maharashtra',
-        emergencyContact: '+91 9876501234',
         bloodGroup: 'AB+',
         dateOfBirth: '1982-03-22',
         gender: 'Female',
@@ -395,7 +447,6 @@ const TeacherManagementPanel: React.FC = () => {
         experience: '15',
         joiningDate: '2010-06-01',
         address: 'Delhi, India',
-        emergencyContact: '+91 9123456781',
         bloodGroup: 'B+',
         dateOfBirth: '1978-12-15',
         gender: 'Male',
@@ -419,7 +470,6 @@ const TeacherManagementPanel: React.FC = () => {
       { wch: 18 }, // Experience
       { wch: 20 }, // Joining Date
       { wch: 25 }, // Address
-      { wch: 18 }, // Emergency Contact
       { wch: 12 }, // Blood Group
       { wch: 20 }, // Date of Birth
       { wch: 10 }, // Gender
@@ -432,6 +482,97 @@ const TeacherManagementPanel: React.FC = () => {
     
     // Generate and download the file
     XLSX.writeFile(workbook, 'teacher_import_template.xlsx');
+  };
+
+  const addDemoTeachers = async () => {
+    try {
+      const demoTeachers = [
+        {
+          name: 'Dr. John Smith',
+          email: 'john.smith@dypsn.edu',
+          phone: '9876543210',
+          department: 'Computer Science',
+          designation: 'Professor',
+          qualification: 'Ph.D. in Computer Science',
+          specialization: 'Machine Learning',
+          experience: '15 years',
+          joiningDate: '2020-01-15',
+          salary: '80000',
+          address: '123 Main St, Pune',
+          bloodGroup: 'A+',
+          dateOfBirth: '1980-05-15',
+          gender: 'Male',
+          isActive: true
+        },
+        {
+          name: 'Prof. Sarah Johnson',
+          email: 'sarah.johnson@dypsn.edu',
+          phone: '9876543211',
+          department: 'Computer Science',
+          designation: 'Associate Professor',
+          qualification: 'M.Tech in Computer Science',
+          specialization: 'Data Structures',
+          experience: '10 years',
+          joiningDate: '2021-06-01',
+          salary: '65000',
+          address: '456 Oak Ave, Pune',
+          bloodGroup: 'B+',
+          dateOfBirth: '1985-08-20',
+          gender: 'Female',
+          isActive: true
+        },
+        {
+          name: 'Dr. Michael Brown',
+          email: 'michael.brown@dypsn.edu',
+          phone: '9876543212',
+          department: 'Computer Science',
+          designation: 'Assistant Professor',
+          qualification: 'Ph.D. in Software Engineering',
+          specialization: 'Web Development',
+          experience: '8 years',
+          joiningDate: '2022-03-10',
+          salary: '55000',
+          address: '789 Pine St, Pune',
+          bloodGroup: 'O+',
+          dateOfBirth: '1988-12-10',
+          gender: 'Male',
+          isActive: true
+        }
+      ];
+
+      for (const teacherData of demoTeachers) {
+        const teacherId = `teacher_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const newTeacher: UserType = {
+          id: teacherId,
+          name: teacherData.name,
+          email: teacherData.email,
+          phone: teacherData.phone,
+          role: 'teacher',
+          department: teacherData.department,
+          designation: teacherData.designation,
+          accessLevel: 'approver',
+          isActive: teacherData.isActive,
+          qualification: teacherData.qualification,
+          specialization: teacherData.specialization,
+          experience: teacherData.experience,
+          joiningDate: teacherData.joiningDate,
+          salary: teacherData.salary,
+          address: teacherData.address,
+          bloodGroup: teacherData.bloodGroup,
+          dateOfBirth: teacherData.dateOfBirth,
+          gender: teacherData.gender,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          loginCount: 0
+        };
+
+        await userService.createTeacher(newTeacher);
+      }
+
+      await loadTeachers();
+    } catch (error) {
+      // Handle error silently
+    }
   };
 
   const handleImportTeachers = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -467,8 +608,6 @@ const TeacherManagementPanel: React.FC = () => {
         'Joining Date (YYYY-MM-DD)': 'joiningDate',
         'address': 'address',
         'Address': 'address',
-        'emergencyContact': 'emergencyContact',
-        'Emergency Contact': 'emergencyContact',
         'bloodGroup': 'bloodGroup',
         'Blood Group': 'bloodGroup',
         'dateOfBirth': 'dateOfBirth',
@@ -516,7 +655,6 @@ const TeacherManagementPanel: React.FC = () => {
           experience: getValue('experience')?.toString?.() || '',
           joiningDate: getValue('joiningDate') || '',
           address: getValue('address') || '',
-          emergencyContact: getValue('emergencyContact')?.toString?.() || '',
           bloodGroup: getValue('bloodGroup') || '',
           dateOfBirth: getValue('dateOfBirth') || '',
           gender: getValue('gender') || '',
@@ -524,14 +662,13 @@ const TeacherManagementPanel: React.FC = () => {
       }).filter(t => t.email);
 
       if (teachers.length === 0) {
-        console.warn('No valid teacher rows found in sheet');
         return;
       }
 
       await userService.bulkImportTeachers(teachers);
       await loadTeachers();
     } catch (err) {
-      console.error('Failed to import teachers:', err);
+      // Handle error silently
     } finally {
       setIsImporting(false);
       e.target.value = '';
@@ -542,8 +679,19 @@ const TeacherManagementPanel: React.FC = () => {
     const matchesSearch = teacher.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          teacher.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          teacher.phone?.includes(searchTerm);
-    const matchesDepartment = !filterDepartment || teacher.department === filterDepartment;
+    
+    // Handle department mapping - convert UI department to database format
+    let matchesDepartment = true;
+    if (filterDepartment) {
+      const teacherDeptCode = getDepartmentCode(teacher.department);
+      const filterDeptCode = getDepartmentCode(filterDepartment);
+      matchesDepartment = teacherDeptCode === filterDeptCode || 
+                         teacher.department === filterDepartment ||
+                         teacherDeptCode === filterDepartment;
+    }
+    
     const matchesDesignation = !filterDesignation || teacher.designation === filterDesignation;
+    
     
     return matchesSearch && matchesDepartment && matchesDesignation;
   });
@@ -568,32 +716,45 @@ const TeacherManagementPanel: React.FC = () => {
           <h2 className="text-lg lg:text-2xl font-bold text-gray-900 mb-2">Teacher Management</h2>
           <p className="text-sm lg:text-base text-gray-600">Manage faculty members and their information</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full lg:w-auto">
           <button
-          onClick={() => {
-            setShowForm(true);
-            setEditingTeacher(null);
-            resetForm();
-          }}
-          className="btn-mobile bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 active:scale-95 w-full lg:w-auto"
-        >
-          <Plus className="w-5 h-5" />
-          Add Teacher
-        </button>
-                  <button
-          onClick={() => downloadExcelTemplate()}
-          className="btn-mobile bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-2 text-sm"
-        >
-          <Download className="w-4 h-4" />
-          Excel Template
-        </button>
-          <label className="btn-mobile bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 cursor-pointer font-medium">
+            onClick={() => {
+              setShowForm(true);
+              setEditingTeacher(null);
+              resetForm();
+            }}
+            className="btn-mobile bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Add Teacher</span>
+            <span className="sm:hidden">Add</span>
+          </button>
+          
+          <button
+            onClick={() => downloadExcelTemplate()}
+            className="btn-mobile bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Excel Template</span>
+            <span className="sm:hidden">Template</span>
+          </button>
+          <label className="btn-mobile bg-blue-600 hover:bg-blue-700 text-white cursor-pointer flex items-center justify-center gap-2">
             <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportTeachers} disabled={isImporting} />
             <Upload className="w-4 h-4" />
-            {isImporting ? 'Importing…' : 'Import Excel'}
+            <span className="hidden sm:inline">{isImporting ? 'Importing…' : 'Import Excel'}</span>
+            <span className="sm:hidden">{isImporting ? 'Importing…' : 'Import'}</span>
           </label>
+          <button
+            onClick={exportTeachers}
+            className="btn-mobile bg-purple-600 hover:bg-purple-700 text-white flex items-center justify-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Export Excel</span>
+            <span className="sm:hidden">Export</span>
+          </button>
         </div>
       </div>
+
 
       {/* Search and Filters - Mobile Optimized */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 lg:gap-4 mb-4 lg:mb-6">
@@ -756,12 +917,6 @@ const TeacherManagementPanel: React.FC = () => {
                       <Phone className="w-4 h-4 mr-3 text-gray-400" />
                       <span>{selectedTeacher.phone}</span>
                     </div>
-                    {selectedTeacher.emergencyContact && (
-                      <div className="flex items-center text-gray-600">
-                        <AlertCircle className="w-4 h-4 mr-3 text-gray-400" />
-                        <span>Emergency: {selectedTeacher.emergencyContact}</span>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1057,16 +1212,6 @@ const TeacherManagementPanel: React.FC = () => {
                       <option key={bg} value={bg}>{bg}</option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <label className="label-mobile">Emergency Contact</label>
-                  <input
-                    type="tel"
-                    value={formData.emergencyContact}
-                    onChange={(e) => setFormData({...formData, emergencyContact: e.target.value})}
-                    className="input-mobile"
-                    placeholder="Emergency contact number"
-                  />
                 </div>
               </div>
 

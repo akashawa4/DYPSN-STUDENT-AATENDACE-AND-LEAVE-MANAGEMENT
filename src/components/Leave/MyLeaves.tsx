@@ -5,9 +5,9 @@ import { leaveService } from '../../firebase/firestore';
 import { userService } from '../../firebase/firestore';
 import { LeaveRequest, User } from '../../types';
 import { saveAs } from 'file-saver';
+import { getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
-const YEARS = ['2nd', '3rd', '4th'];
-const SEMS = ['3', '4', '5', '6', '7', '8'];
+const YEARS = ['1st', '2nd', '3rd', '4th'];
 const DIVS = ['A', 'B', 'C'];
 
 const MyLeaves: React.FC = () => {
@@ -20,9 +20,24 @@ const MyLeaves: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Add year/sem/div state for teacher/HOD
-  const [year, setYear] = useState(YEARS[0]);
-  const [sem, setSem] = useState(SEMS[0]);
+  const [year, setYear] = useState('1st');
+  const [sem, setSem] = useState('1');
   const [div, setDiv] = useState(DIVS[0]);
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('1'));
+
+  // Handle year change to update available semesters
+  const handleYearChange = (newYear: string) => {
+    setYear(newYear);
+    const normalizedYear = newYear.replace(/(st|nd|rd|th)/i, '');
+    const newAvailableSemesters = getAvailableSemesters(normalizedYear);
+    setAvailableSemesters(newAvailableSemesters);
+    
+    // If current semester is not valid for new year, reset to first available
+    if (!isValidSemesterForYear(normalizedYear, sem)) {
+      const defaultSem = getDefaultSemesterForYear(normalizedYear);
+      setSem(defaultSem);
+    }
+  };
 
   // Load leave requests with optimized loading and timeout
   useEffect(() => {
@@ -30,13 +45,11 @@ const MyLeaves: React.FC = () => {
       if (!user) return;
       setLoading(true);
       setError(null);
-      console.log(`🔄 Loading leave requests for user: ${user.name} (${user.role})`);
       
       // Add timeout to prevent infinite loading
       const timeoutId = setTimeout(() => {
         setLoading(false);
         setError('Loading timeout. Please try again.');
-        console.log('⏰ Loading timeout reached');
       }, 30000); // 30 seconds timeout
       
       try {
@@ -48,7 +61,6 @@ const MyLeaves: React.FC = () => {
           const month = String(now.getMonth() + 1).padStart(2, '0');
           const yearForMonth = String(now.getFullYear());
 
-          console.log(`📅 Fetching leaves for: ${numericYear}/${sem}/${div}/${subject}/${yearForMonth}/${month}`);
 
           const classLeaves = await leaveService.getClassLeavesByMonth(
             numericYear,
@@ -61,17 +73,14 @@ const MyLeaves: React.FC = () => {
 
           // Restrict to teacher's department if present on records
           const filtered = classLeaves.filter(l => !l.department || l.department === user.department);
-          console.log(`✅ Loaded ${filtered.length} leave records for teacher/HOD`);
           setLeaveRecords(filtered);
         } else {
           // Student: only their own leaves
-          console.log(`📚 Fetching student leaves for: ${user.id}`);
           const requests = await leaveService.getLeaveRequestsByUser(user.id);
-          console.log(`✅ Loaded ${requests.length} leave records for student`);
           setLeaveRecords(requests);
         }
       } catch (error) {
-        console.error('❌ Error loading leave requests:', error);
+        // Handle error silently
         setError('Failed to load leave requests. Please try again.');
         // Set empty array to prevent infinite loading
         setLeaveRecords([]);
@@ -182,7 +191,7 @@ const MyLeaves: React.FC = () => {
               studentName = studentData.name || '';
             }
           } catch (error) {
-            console.log('Could not fetch student data for export:', error);
+            // Handle error silently
           }
         }
       } else {
@@ -283,14 +292,14 @@ const MyLeaves: React.FC = () => {
         <div className="flex flex-wrap gap-2 mb-2">
           <div>
             <label className="block text-xs font-medium text-gray-600">Year</label>
-            <select value={year} onChange={e => setYear(e.target.value)} className="mt-1 block border rounded p-2">
+            <select value={year} onChange={e => handleYearChange(e.target.value)} className="mt-1 block border rounded p-2">
               {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600">Semester</label>
             <select value={sem} onChange={e => setSem(e.target.value)} className="mt-1 block border rounded p-2">
-              {SEMS.map(s => <option key={s} value={s}>{s}</option>)}
+              {availableSemesters.map(s => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
           <div>

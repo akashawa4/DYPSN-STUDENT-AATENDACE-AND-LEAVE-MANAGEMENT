@@ -14,7 +14,8 @@ import {
   Bell,
   X,
   LogOut,
-  GraduationCap
+  GraduationCap,
+  BookOpen
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -44,6 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentPage, onPageC
       { id: 'notifications', label: 'Updates', icon: Bell },
       { id: 'leave-requests', label: 'Leave Approval Panel', icon: CheckCircle },
       { id: 'student-management', label: 'Student Management', icon: Users },
+      { id: 'subject-management', label: 'Subject Management', icon: BookOpen },
     ];
 
     const adminItems = [

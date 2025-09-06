@@ -240,7 +240,7 @@ const RecentActivity: React.FC = () => {
           setRecentActivities([]);
         }
       } catch (error) {
-        console.error('Error loading recent activities:', error);
+        // Handle error silently
       } finally {
         setLoading(false);
       }

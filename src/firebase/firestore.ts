@@ -17,7 +17,7 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, LeaveRequest, AttendanceLog, Notification } from '../types';
+import { User, LeaveRequest, AttendanceLog, Notification, Subject } from '../types';
 
 // Collection names
 export const COLLECTIONS = {
@@ -29,7 +29,8 @@ export const COLLECTIONS = {
   NOTIFICATIONS: 'notifications',
   AUDIT_LOGS: 'auditLogs',
   SETTINGS: 'settings',
-  STUDENTS: 'students'
+  STUDENTS: 'students',
+  SUBJECTS: 'subjects'
 } as const;
 
 // Department constants
@@ -52,25 +53,25 @@ export const DEPARTMENT_NAMES = {
 
 // Batch-based collection path builder with department support
 export const buildBatchPath = {
-  // Build attendance path: /attendance/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
-  attendance: (batch: string, department: string, sem: string, div: string, subject: string, date: Date) => {
+  // Build attendance path: /attendance/batch/{batch}/DEPARTMENT/year/{studentYear}/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
+  attendance: (batch: string, department: string, studentYear: string, sem: string, div: string, subject: string, date: Date) => {
     const year = date.getFullYear().toString();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-    return `${COLLECTIONS.ATTENDANCE}/batch/${batch}/${department}/sems/${sem}/divs/${div}/subjects/${subject}/${year}/${month}/${day}`;
+    return `${COLLECTIONS.ATTENDANCE}/batch/${batch}/${department}/year/${studentYear}/sems/${sem}/divs/${div}/subjects/${subject}/${year}/${month}/${day}`;
   },
 
-  // Build leave path: /leave/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
-  leave: (batch: string, department: string, sem: string, div: string, subject: string, date: Date) => {
+  // Build leave path: /leave/batch/{batch}/DEPARTMENT/year/{studentYear}/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
+  leave: (batch: string, department: string, studentYear: string, sem: string, div: string, subject: string, date: Date) => {
     const year = date.getFullYear().toString();
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
-    return `${COLLECTIONS.LEAVE}/batch/${batch}/${department}/sems/${sem}/divs/${div}/subjects/${subject}/${year}/${month}/${day}`;
+    return `${COLLECTIONS.LEAVE}/batch/${batch}/${department}/year/${studentYear}/sems/${sem}/divs/${div}/subjects/${subject}/${year}/${month}/${day}`;
   },
 
-  // Build student path: /students/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/students
-  student: (batch: string, department: string, sem: string, div: string) => {
-    return `${COLLECTIONS.STUDENTS}/batch/${batch}/${department}/sems/${sem}/divs/${div}/students`;
+  // Build student path: /students/batch/{batch}/DEPARTMENT/year/{year}/sems/{sem}/divs/{div}/students
+  student: (batch: string, department: string, year: string, sem: string, div: string) => {
+    return `${COLLECTIONS.STUDENTS}/batch/${batch}/${department}/year/${year}/sems/${sem}/divs/${div}/students`;
   },
 
   // Build teacher path: /teachers/batch/{batch}/DEPARTMENT/sems/{sem}/divs/{div}/teachers
@@ -184,7 +185,7 @@ export const autoDetectDepartment = async (userId: string, role: 'student' | 'te
         // Check department-based collections for existing data
         for (const dept of Object.values(DEPARTMENTS)) {
           try {
-            const batchPath = buildBatchPath.student('2025', dept, '3', 'A');
+            const batchPath = buildBatchPath.student('2025', dept, '2nd', '3', 'A');
             const studentRef = doc(db, batchPath, userId);
             const studentDoc = await getDoc(studentRef);
             
@@ -229,7 +230,7 @@ export const autoDetectDepartment = async (userId: string, role: 'student' | 'te
     // Default to CSE if no department found
     return DEPARTMENTS.CSE;
   } catch (error) {
-    console.error('[autoDetectDepartment] Error detecting department:', error);
+    // Handle error silently
     return DEPARTMENTS.CSE;
   }
 };
@@ -284,7 +285,7 @@ export const getDepartmentFaculty = async (department: string): Promise<any[]> =
     
     return faculty;
   } catch (error) {
-    console.error('[getDepartmentFaculty] Error getting department faculty:', error);
+    // Handle error silently
     return [];
   }
 };
@@ -317,7 +318,7 @@ export const getDepartmentHead = async (department: string): Promise<any | null>
     
     return null;
   } catch (error) {
-    console.error('[getDepartmentHead] Error getting department head:', error);
+    // Handle error silently
     return null;
   }
 };
@@ -348,7 +349,7 @@ export const userService = {
       if (existingData.rollNumber && existingData.rollNumber !== userData.rollNumber) {
         isRollNumberChange = true;
         oldRollNumber = existingData.rollNumber;
-        console.log(`[userService] Roll number change detected: ${oldRollNumber} → ${userData.rollNumber}`);
+        // Roll number change detected
       }
     }
 
@@ -366,12 +367,12 @@ export const userService = {
       let department = userData.department || (userData as any).dept;
       if (!department) {
         department = await autoDetectDepartment(userData.id, 'student');
-        console.log(`[userService] Auto-detected department for student ${userData.id}: ${department}`);
+        // Auto-detected department for student
       } else {
         department = getDepartment(userData);
       }
       
-      const batchPath = buildBatchPath.student(batch, department, userData.sem, userData.div);
+      const batchPath = buildBatchPath.student(batch, department, userData.year, userData.sem, userData.div);
       
       // If roll number changed, migrate historical data
       if (isRollNumberChange && oldRollNumber) {
@@ -381,6 +382,7 @@ export const userService = {
           userData.rollNumber!,
           batch,
           department,
+          userData.year,
           userData.sem,
           userData.div
         );
@@ -404,7 +406,7 @@ export const userService = {
       let department = userData.department || (userData as any).dept || (userData as any).assignedDepartment;
       if (!department) {
         department = await autoDetectDepartment(userData.id, 'teacher');
-        console.log(`[userService] Auto-detected department for teacher ${userData.id}: ${department}`);
+        // Auto-detected department for teacher
       } else {
         department = getTeacherDepartment(userData);
       }
@@ -428,11 +430,12 @@ export const userService = {
     newRollNumber: string,
     batch: string,
     department: string,
+    year: string,
     sem: string,
     div: string
   ): Promise<void> {
     try {
-      console.log(`[userService] Starting data migration for roll number change: ${oldRollNumber} → ${newRollNumber}`);
+      // Starting data migration for roll number change
       
       const migrationResults = {
         attendance: { migrated: 0, errors: 0 },
@@ -445,36 +448,36 @@ export const userService = {
       try {
         await this.migrateAttendanceRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
       } catch (error) {
-        console.error('[userService] Error migrating attendance records:', error);
+        // Handle error silently
       }
 
       // 2. Migrate leave requests
       try {
         await this.migrateLeaveRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
       } catch (error) {
-        console.error('[userService] Error migrating leave records:', error);
+        // Handle error silently
       }
 
       // 3. Migrate notifications
       try {
         await this.migrateNotificationRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
       } catch (error) {
-        console.error('[userService] Error migrating notification records:', error);
+        // Handle error silently
       }
 
       // 4. Migrate audit logs
       try {
         await this.migrateAuditLogRecords(userId, oldRollNumber, newRollNumber, batch, department, sem, div, migrationResults);
       } catch (error) {
-        console.error('[userService] Error migrating audit log records:', error);
+        // Handle error silently
       }
 
       // 5. Update roll number mapping for future reference
       await this.updateRollNumberMapping(userId, oldRollNumber, newRollNumber);
 
-      console.log(`[userService] Roll number change migration completed:`, migrationResults);
+      // Roll number change migration completed
     } catch (error) {
-      console.error('[userService] Error in roll number change migration:', error);
+      // Handle error silently
       throw error;
     }
   },
@@ -514,7 +517,7 @@ export const userService = {
         
         results.attendance.migrated++;
       } catch (error) {
-        console.error('[userService] Error updating attendance record:', docSnapshot.id, error);
+        // Handle error silently
         results.attendance.errors++;
       }
     }
@@ -542,7 +545,7 @@ export const userService = {
     for (const subject of subjects) {
       try {
         // Query department-based attendance for this subject
-        const attendancePath = buildBatchPath.attendance(batch, department, sem, div, subject, new Date());
+        const attendancePath = buildBatchPath.attendance(batch, department, '2nd', sem, div, subject, new Date());
         const attendanceQuery = query(
           collection(db, attendancePath),
           where('userId', '==', userId)
@@ -563,7 +566,7 @@ export const userService = {
             
             results.attendance.migrated++;
           } catch (error) {
-            console.error('[userService] Error updating department attendance record:', docSnapshot.id, error);
+            // Handle error silently
             results.attendance.errors++;
           }
         }
@@ -605,7 +608,7 @@ export const userService = {
         
         results.leaves.migrated++;
       } catch (error) {
-        console.error('[userService] Error updating leave record:', docSnapshot.id, error);
+        // Handle error silently
         results.leaves.errors++;
       }
     }
@@ -631,7 +634,7 @@ export const userService = {
     
     for (const subject of subjects) {
       try {
-        const leavePath = buildBatchPath.leave(batch, department, sem, div, subject, new Date());
+        const leavePath = buildBatchPath.leave(batch, department, '2nd', sem, div, subject, new Date());
         const leaveQuery = query(
           collection(db, leavePath),
           where('userId', '==', userId)
@@ -651,7 +654,7 @@ export const userService = {
             
             results.leaves.migrated++;
           } catch (error) {
-            console.error('[userService] Error updating department leave record:', docSnapshot.id, error);
+            // Handle error silently
             results.leaves.errors++;
           }
         }
@@ -870,7 +873,7 @@ export const userService = {
     await deleteDoc(userRef);
   },
 
-  // Get students by year, semester, and division
+  // Get students by year, semester, and division (from main users collection)
   async getStudentsByYearSemDiv(year: string, sem: string, div: string): Promise<User[]> {
     const usersRef = collection(db, COLLECTIONS.USERS);
     const q = query(
@@ -887,6 +890,29 @@ export const userService = {
       id: doc.id,
       ...doc.data()
     })) as User[];
+  },
+
+  // Get students by batch, department, year, semester, and division (from batch structure)
+  async getStudentsByBatchDeptYearSemDiv(
+    batch: string, 
+    department: string, 
+    year: string, 
+    sem: string, 
+    div: string
+  ): Promise<User[]> {
+    try {
+      const batchPath = buildBatchPath.student(batch, department, year, sem, div);
+      const studentsRef = collection(db, batchPath);
+      const querySnapshot = await getDocs(studentsRef);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as User[];
+    } catch (error) {
+      console.error('[userService] Error getting students from batch structure:', error);
+      return [];
+    }
   },
 
   // Get all students
@@ -1136,22 +1162,22 @@ export const userService = {
             const teacherPhone = userData.phone || '';
             console.log(`📞 Teacher phone: "${teacherPhone}", Input phone: "${phoneNumber}"`);
             
-            if (!teacherPhone) {
+    if (!teacherPhone) {
               console.log(`❌ Teacher has no phone number`);
-              return null;
-            }
-            
-            const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
-            const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
+      return null;
+    }
+    
+    const normalizedTeacherPhone = teacherPhone.replace(/\D/g, '');
+    const normalizedInputPhone = phoneNumber.replace(/\D/g, '');
             
             console.log(`📞 Normalized teacher phone: "${normalizedTeacherPhone}", Normalized input phone: "${normalizedInputPhone}"`);
-            
-            if (
-              normalizedTeacherPhone === normalizedInputPhone ||
-              teacherPhone === phoneNumber ||
-              teacherPhone.endsWith(phoneNumber) ||
-              phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
-            ) {
+
+    if (
+      normalizedTeacherPhone === normalizedInputPhone ||
+      teacherPhone === phoneNumber ||
+      teacherPhone.endsWith(phoneNumber) ||
+      phoneNumber.endsWith(normalizedTeacherPhone.slice(-10))
+    ) {
               console.log(`✅ Teacher phone number matches! Authentication successful.`);
               const { id: _ignoredTId, ...teacherRest } = userData as any;
               return { id: doc.id, ...teacherRest };
@@ -1161,7 +1187,7 @@ export const userService = {
             }
           } else {
             console.log(`❌ User found but role is "${userData.role}", not "teacher"`);
-            return null;
+    return null;
           }
         } else {
           console.log(`❌ No teacher found with email: ${cleanEmail}`);
@@ -1297,7 +1323,8 @@ export const userService = {
     await batch.commit();
   },
 
-  // Create organized student collections by year, semester, division
+  // DEPRECATED: Create organized student collections by year, semester, division
+  // This function is deprecated. Use createUser() which automatically creates students in the batch structure.
   async createOrganizedStudentCollection(student: User): Promise<void> {
     if (!student.year || !student.sem || !student.div || !student.rollNumber) {
       throw new Error('Missing year, sem, div, or rollNumber for organized collection path');
@@ -1314,7 +1341,8 @@ export const userService = {
     });
   },
 
-  // Get students from organized collection
+  // DEPRECATED: Get students from organized collection
+  // This function is deprecated. Use getStudentsByYearSemDiv() which queries the main users collection.
   async getStudentsFromOrganizedCollection(year: string, sem: string, div: string): Promise<User[]> {
     const collectionPath = `students/${year}/sems/${sem}/divs/${div}/students`;
     const studentsRef = collection(db, collectionPath);
@@ -1351,7 +1379,10 @@ export const userService = {
           const div = divDoc.id;
           
           // Get all students for this division
-          const students = await this.getStudentsFromOrganizedCollection(year, sem, div);
+          // Use batch structure instead of deprecated organized collection
+          const batch = '2025'; // Default batch year
+          const department = DEPARTMENTS.CSE; // Default department
+          const students = await this.getStudentsByBatchDeptYearSemDiv(batch, department, year, sem, div);
           allStudents.push(...students);
         }
       }
@@ -1438,7 +1469,7 @@ export const leaveService = {
         });
         
         // Mirror to department-based structure
-        const hierPath = buildBatchPath.leave(batch, dept, sem, div, subject, dateObj);
+        const hierPath = buildBatchPath.leave(batch, dept, '2nd', sem, div, subject, dateObj);
         const hierRef = doc(collection(db, hierPath), docRef.id);
         await setDoc(hierRef, {
           ...docData,
@@ -1966,7 +1997,8 @@ export const attendanceService = {
     
     const batch = getBatchYear(year);
     const department = (attendanceData as any).department || DEPARTMENTS.CSE;
-    const collectionPath = buildBatchPath.attendance(batch, department, sem, div, subject, dateObj);
+    const studentYear = (attendanceData as any).studentYear || year; // Use studentYear if available, fallback to year
+    const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
     const attendanceRef = doc(collection(db, collectionPath), docId);
     await setDoc(attendanceRef, {
       ...attendanceData,
@@ -2149,7 +2181,7 @@ export const attendanceService = {
     startDate: Date,
     endDate: Date
   ): Promise<AttendanceLog[]> {
-    // Path: attendance/{year}/sems/{sem}/divs/{div}/subjects/{subject}/date/record
+    // Path: /attendance/batch/{batch}/DEPARTMENT/year/{studentYear}/sems/{sem}/divs/{div}/subjects/{subject}/{year}/{month}/{day}
     // Use Promise.all for parallel date processing - much faster
     
     // Generate all dates in the range
@@ -2166,11 +2198,11 @@ export const attendanceService = {
     const datePromises = dates.map(async (date) => {
       const dateString = date.toISOString().split('T')[0];
       const dateObj = new Date(dateString);
-      const attendanceYear = dateObj.getFullYear().toString();
-      const attendanceMonth = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-      const attendanceDate = dateObj.getDate().toString().padStart(2, '0');
       
-      const collectionPath = `attendance/${year}/sems/${sem}/divs/${div}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+      // Use batch structure with student year
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE; // Default department, should be passed as parameter
+      const collectionPath = buildBatchPath.attendance(batch, department, year, sem, div, subject, dateObj);
       
       try {
         const recordsRef = collection(db, collectionPath);
@@ -3123,7 +3155,7 @@ export const batchMigrationService = {
               if (student.year && student.sem && student.div) {
                 // Use batch 2025 for existing data
                 const department = getDepartment(student);
-                const batchPath = buildBatchPath.student('2025', department, student.sem, student.div);
+                const batchPath = buildBatchPath.student('2025', department, student.year, student.sem, student.div);
                 const studentRef = doc(db, batchPath, student.rollNumber || student.id);
                 await setDoc(studentRef, {
                   ...student,
@@ -3186,7 +3218,7 @@ export const batchMigrationService = {
               const batch = getBatchYear(attendance.year);
               const department = getDepartment(attendance);
               const dateObj = new Date(attendance.date);
-              const batchPath = buildBatchPath.attendance(batch, department, attendance.sem, attendance.div, attendance.subject, dateObj);
+              const batchPath = buildBatchPath.attendance(batch, department, attendance.year, attendance.sem, attendance.div, attendance.subject, dateObj);
               const attendanceRef = doc(db, batchPath, attendance.id);
               await setDoc(attendanceRef, {
                 ...attendance,
@@ -3219,7 +3251,7 @@ export const batchMigrationService = {
               const department = getDepartment(leave);
               const dateObj = new Date(leave.fromDate);
               const subject = leave.subject || 'General';
-              const batchPath = buildBatchPath.leave(batch, department, leave.sem, leave.div, subject, dateObj);
+              const batchPath = buildBatchPath.leave(batch, department, leave.year, leave.sem, leave.div, subject, dateObj);
               const leaveRef = doc(db, batchPath, leave.id);
               await setDoc(leaveRef, {
                 ...leave,
@@ -3260,7 +3292,7 @@ export const batchMigrationService = {
   async getMigrationStatus(): Promise<{ migrated: boolean; counts?: any }> {
     try {
       // Check if any batch 2025 data exists
-      const batch2025Students = await getDocs(collection(db, buildBatchPath.student('2025', DEPARTMENTS.CSE, '3', 'A')));
+      const batch2025Students = await getDocs(collection(db, buildBatchPath.student('2025', DEPARTMENTS.CSE, '2nd', '3', 'A')));
       const batch2025Teachers = await getDocs(collection(db, buildBatchPath.teacher('2025', DEPARTMENTS.CSE, '3', 'A')));
       
       if (!batch2025Students.empty || !batch2025Teachers.empty) {
@@ -3301,7 +3333,7 @@ export const importExportService = {
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
         try {
-          const path = buildBatchPath.attendance(batch, department, sem, div, subject, currentDate);
+          const path = buildBatchPath.attendance(batch, department, '2nd', sem, div, subject, currentDate);
           const snapshot = await getDocs(collection(db, path));
           
           snapshot.docs.forEach(doc => {
@@ -3360,7 +3392,7 @@ export const importExportService = {
       const currentDate = new Date(startDate);
       while (currentDate <= endDate) {
         try {
-          const path = buildBatchPath.leave(batch, department, sem, div, subject, currentDate);
+          const path = buildBatchPath.leave(batch, department, '2nd', sem, div, subject, currentDate);
           const snapshot = await getDocs(collection(db, path));
           
           snapshot.docs.forEach(doc => {
@@ -3410,7 +3442,7 @@ export const importExportService = {
     format: 'xlsx' | 'csv' = 'xlsx'
   ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
     try {
-      const path = buildBatchPath.student(batch, department, sem, div);
+      const path = buildBatchPath.student(batch, department, '2nd', sem, div);
       const snapshot = await getDocs(collection(db, path));
       
       if (snapshot.empty) {
@@ -3587,7 +3619,7 @@ export const importExportService = {
       for (const dept of Object.values(DEPARTMENTS)) {
         try {
           // Count students
-          const studentsSnapshot = await getDocs(collection(db, buildBatchPath.student(batch, dept, '3', 'A')));
+          const studentsSnapshot = await getDocs(collection(db, buildBatchPath.student(batch, dept, '2nd', '3', 'A')));
           const studentCount = studentsSnapshot.size;
 
           // Count teachers
@@ -3611,6 +3643,520 @@ export const importExportService = {
     } catch (error) {
       console.error('[importExportService] Error getting batch statistics:', error);
       return { batch, error: (error as any).message };
+    }
+  }
+};
+
+// Subject Management Service
+export const subjectService = {
+  // Helper function to build subject collection path
+  // New structure: /subjects/2025/CSE/year/2nd/sems/3
+  buildSubjectPath: (batch: string, department: string, year: string, sem: string) => {
+    return `${COLLECTIONS.SUBJECTS}/${batch}/${department}/year/${year}/sems/${sem}`;
+  },
+
+  // Create a new subject
+  async createSubject(subjectData: Subject): Promise<void> {
+    try {
+      const path = this.buildSubjectPath(subjectData.batch, subjectData.department, subjectData.year, subjectData.sem);
+      console.log(`[subjectService] Creating subject with path: ${path}`);
+      console.log(`[subjectService] Subject ID: ${subjectData.id}`);
+      
+      const subjectRef = doc(db, path, subjectData.id);
+      
+      const subjectDoc = {
+        ...subjectData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      await setDoc(subjectRef, subjectDoc);
+      console.log(`[subjectService] Subject created successfully: ${subjectData.subjectCode}`);
+    } catch (error) {
+      console.error('[subjectService] Error creating subject:', error);
+      throw error;
+    }
+  },
+
+  // Get subjects by year, sem, department (no division)
+  async getSubjectsByYearSem(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string
+  ): Promise<Subject[]> {
+    try {
+      const path = this.buildSubjectPath(batch, department, year, sem);
+      console.log(`[subjectService] Getting subjects with path: ${path}`);
+      const subjectsRef = collection(db, path);
+      const q = query(subjectsRef, orderBy('subjectCode'));
+      const querySnapshot = await getDocs(q);
+      
+      console.log(`[subjectService] Found ${querySnapshot.docs.length} subjects`);
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Subject[];
+    } catch (error) {
+      console.error('[subjectService] Error getting subjects:', error);
+      return [];
+    }
+  },
+
+  // Get subjects for a department with optional year/semester filtering
+  async getSubjectsByDepartment(
+    department: string, 
+    year?: string, 
+    semester?: string
+  ): Promise<Subject[]> {
+    try {
+      console.log(`[subjectService] Getting subjects for department: ${department}, year: ${year}, sem: ${semester}`);
+      const subjects: Subject[] = [];
+      
+      // If specific year/semester is requested, only check those
+      if (year && semester) {
+        const batches = ['2025', '2024', '2023', '2022'];
+        for (const batch of batches) {
+          try {
+            const path = this.buildSubjectPath(batch, department, year, semester);
+            console.log(`[subjectService] Checking specific path: ${path}`);
+            const subjectsRef = collection(db, path);
+            const q = query(subjectsRef, orderBy('subjectCode'));
+            const querySnapshot = await getDocs(q);
+            
+            console.log(`[subjectService] Query snapshot size: ${querySnapshot.docs.length} for path: ${path}`);
+            if (querySnapshot.docs.length > 0) {
+              console.log(`[subjectService] Found ${querySnapshot.docs.length} subjects in ${path}`);
+              console.log(`[subjectService] Sample subject data:`, querySnapshot.docs[0].data());
+            }
+            
+            const batchSubjects = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as Subject[];
+            
+            subjects.push(...batchSubjects);
+          } catch (error) {
+            console.log(`[subjectService] Collection not found: ${this.buildSubjectPath(batch, department, year, semester)}`, error);
+            continue;
+          }
+        }
+      } else if (semester && !year) {
+        // Get subjects for semester across all years
+        const batches = ['2025', '2024', '2023', '2022'];
+        const years = ['2nd', '3rd', '4th'];
+        for (const batch of batches) {
+          for (const y of years) {
+            try {
+              const path = this.buildSubjectPath(batch, department, y, semester);
+              const subjectsRef = collection(db, path);
+              const q = query(subjectsRef, orderBy('subjectCode'));
+              const querySnapshot = await getDocs(q);
+              const batchSubjects = querySnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+              })) as Subject[];
+              subjects.push(...batchSubjects);
+            } catch (error) {
+              continue;
+            }
+          }
+        }
+        // De-duplicate by subjectCode + subjectName across years
+        const seen = new Set<string>();
+        const deduped: Subject[] = [];
+        for (const s of subjects) {
+          const key = `${(s as any).subjectCode || ''}|${(s as any).subjectName || ''}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            deduped.push(s);
+          }
+        }
+        return deduped;
+      } else {
+        // If no specific filters, get all subjects (original behavior)
+        const batches = ['2025', '2024', '2023', '2022'];
+        const sems = ['1', '2', '3', '4', '5', '6', '7', '8'];
+        const years = ['2nd', '3rd', '4th'];
+        
+        for (const batch of batches) {
+          for (const sem of sems) {
+            for (const year of years) {
+              try {
+                const path = this.buildSubjectPath(batch, department, year, sem);
+                const subjectsRef = collection(db, path);
+                const q = query(subjectsRef, orderBy('subjectCode'));
+                const querySnapshot = await getDocs(q);
+                
+                const batchSubjects = querySnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data()
+                })) as Subject[];
+                
+                subjects.push(...batchSubjects);
+              } catch (error) {
+                continue;
+              }
+            }
+          }
+        }
+      }
+      
+      console.log(`[subjectService] Total subjects found: ${subjects.length}`);
+      
+      // If no subjects found for the specific department, try to find any subjects in the system
+      if (subjects.length === 0) {
+        console.log(`[subjectService] No subjects found for ${department}, checking all departments...`);
+        const allDepartments = ['CSE', 'IT', 'ECE', 'EEE', 'ME', 'CE', 'AI&ML', 'Data Science'];
+        for (const dept of allDepartments) {
+          if (dept === department) continue; // Skip the original department
+          
+          const batches = ['2025', '2024', '2023', '2022'];
+          for (const batch of batches) {
+            try {
+              const path = this.buildSubjectPath(batch, dept, '2nd', semester || '3');
+              console.log(`[subjectService] Checking fallback path: ${path}`);
+              const subjectsRef = collection(db, path);
+              const q = query(subjectsRef, orderBy('subjectCode'));
+              const querySnapshot = await getDocs(q);
+              
+              if (querySnapshot.docs.length > 0) {
+                console.log(`[subjectService] Found ${querySnapshot.docs.length} subjects in fallback path: ${path}`);
+                const batchSubjects = querySnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data()
+                })) as Subject[];
+                subjects.push(...batchSubjects);
+                break; // Found subjects, no need to check more
+              }
+            } catch (error) {
+              continue;
+            }
+          }
+          if (subjects.length > 0) break; // Found subjects, no need to check more departments
+        }
+      }
+      
+      // Apply year filter if provided
+      const finalSubjects = year ? subjects.filter(s => String((s as any).year || '').trim() === String(year).trim()) : subjects;
+      console.log(`[subjectService] Final subjects after year filter: ${finalSubjects.length}`);
+      return finalSubjects;
+    } catch (error) {
+      console.error('[subjectService] Error getting subjects by department:', error);
+      return [];
+    }
+  },
+
+  // Get all subjects for a department across all years and sems (legacy method)
+  async getAllSubjectsByDepartment(department: string): Promise<Subject[]> {
+    return this.getSubjectsByDepartment(department);
+  },
+
+  // Get subject by ID
+  async getSubjectById(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    subjectId: string
+  ): Promise<Subject | null> {
+    try {
+      const path = this.buildSubjectPath(batch, department, year, sem);
+      const subjectRef = doc(db, path, subjectId);
+      const subjectDoc = await getDoc(subjectRef);
+      
+      if (subjectDoc.exists()) {
+        return { id: subjectDoc.id, ...subjectDoc.data() } as Subject;
+      }
+      return null;
+    } catch (error) {
+      console.error('[subjectService] Error getting subject by ID:', error);
+      return null;
+    }
+  },
+
+  // Update subject
+  async updateSubject(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    subjectId: string,
+    updates: Partial<Subject>
+  ): Promise<void> {
+    try {
+      const path = this.buildSubjectPath(batch, department, year, sem);
+      const subjectRef = doc(db, path, subjectId);
+      
+      await setDoc(subjectRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`[subjectService] Subject updated: ${subjectId}`);
+    } catch (error) {
+      console.error('[subjectService] Error updating subject:', error);
+      throw error;
+    }
+  },
+
+  // Delete subject
+  async deleteSubject(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    subjectId: string
+  ): Promise<void> {
+    try {
+      const path = this.buildSubjectPath(batch, department, year, sem);
+      const subjectRef = doc(db, path, subjectId);
+      await deleteDoc(subjectRef);
+      
+      console.log(`[subjectService] Subject deleted: ${subjectId}`);
+    } catch (error) {
+      console.error('[subjectService] Error deleting subject:', error);
+      throw error;
+    }
+  },
+
+  // Assign teacher to subject
+  async assignTeacherToSubject(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    subjectId: string,
+    teacherId: string,
+    teacherName: string,
+    teacherEmail: string
+  ): Promise<void> {
+    try {
+      const path = this.buildSubjectPath(batch, department, year, sem);
+      const subjectRef = doc(db, path, subjectId);
+      
+      await setDoc(subjectRef, {
+        teacherId,
+        teacherName,
+        teacherEmail,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      
+      console.log(`[subjectService] Teacher assigned to subject: ${subjectId}`);
+    } catch (error) {
+      console.error('[subjectService] Error assigning teacher:', error);
+      throw error;
+    }
+  },
+
+  // Get subjects assigned to a teacher
+  async getSubjectsByTeacher(teacherId: string): Promise<Subject[]> {
+    try {
+      const subjects: Subject[] = [];
+      const batches = ['2025', '2024', '2023', '2022'];
+      const departments = ['CSE', 'IT', 'ECE', 'EEE', 'ME', 'CE', 'AI&ML', 'Data Science'];
+      const sems = ['1', '2', '3', '4', '5', '6', '7', '8'];
+      const years = ['2nd', '3rd', '4th'];
+      
+      for (const batch of batches) {
+        for (const department of departments) {
+          for (const sem of sems) {
+            for (const year of years) {
+              try {
+                const path = this.buildSubjectPath(batch, department, year, sem);
+                const subjectsRef = collection(db, path);
+                const q = query(subjectsRef, where('teacherId', '==', teacherId));
+                const querySnapshot = await getDocs(q);
+                
+                const teacherSubjects = querySnapshot.docs.map(doc => ({
+                  id: doc.id,
+                  ...doc.data()
+                })) as Subject[];
+                
+                subjects.push(...teacherSubjects);
+              } catch (error) {
+                // Collection might not exist, continue
+                continue;
+              }
+            }
+          }
+        }
+      }
+      
+      return subjects;
+    } catch (error) {
+      console.error('[subjectService] Error getting subjects by teacher:', error);
+      return [];
+    }
+  },
+
+  // Bulk import subjects
+  async bulkImportSubjects(subjects: Subject[]): Promise<void> {
+    try {
+      const batch = writeBatch(db);
+      
+      for (const subject of subjects) {
+        const path = this.buildSubjectPath(subject.batch, subject.department, subject.year, subject.sem);
+        const subjectRef = doc(db, path, subject.id);
+        
+        batch.set(subjectRef, {
+          ...subject,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      }
+      
+      await batch.commit();
+      console.log(`[subjectService] Bulk imported ${subjects.length} subjects`);
+    } catch (error) {
+      console.error('[subjectService] Error bulk importing subjects:', error);
+      throw error;
+    }
+  },
+
+  // Migrate subjects from old structure to new structure
+  async migrateSubjectsToNewStructure(
+    batch: string = '2025',
+    department: string = 'CSE',
+    deleteOldData: boolean = false
+  ): Promise<{ success: boolean; migrated: number; errors: string[] }> {
+    try {
+      console.log('[subjectService] Starting subject migration...');
+      const errors: string[] = [];
+      let migratedCount = 0;
+      
+      // Define the mapping from old structure to new structure
+      const yearSemMapping = [
+        { oldSem: '3', newYear: '2nd', newSem: '3' },
+        { oldSem: '4', newYear: '2nd', newSem: '4' },
+        { oldSem: '5', newYear: '3rd', newSem: '5' },
+        { oldSem: '6', newYear: '3rd', newSem: '6' },
+        { oldSem: '7', newYear: '4th', newSem: '7' },
+        { oldSem: '8', newYear: '4th', newSem: '8' }
+      ];
+      
+      const divisions = ['A', 'B', 'C'];
+      
+      for (const mapping of yearSemMapping) {
+        for (const div of divisions) {
+          try {
+            // Old path: /subjects/2025/CSE/sems/7/divs/A/
+            const oldPath = `${COLLECTIONS.SUBJECTS}/${batch}/${department}/sems/${mapping.oldSem}/divs/${div}`;
+            console.log(`[subjectService] Checking old path: ${oldPath}`);
+            
+            const oldSubjectsRef = collection(db, oldPath);
+            const oldQuerySnapshot = await getDocs(oldSubjectsRef);
+            
+            if (oldQuerySnapshot.docs.length > 0) {
+              console.log(`[subjectService] Found ${oldQuerySnapshot.docs.length} subjects in ${oldPath}`);
+              
+              // New path: /subjects/2025/CSE/year/4th/sems/7/
+              const newPath = `${COLLECTIONS.SUBJECTS}/${batch}/${department}/year/${mapping.newYear}/sems/${mapping.newSem}`;
+              console.log(`[subjectService] Migrating to new path: ${newPath}`);
+              
+              // Process each subject
+              for (const docSnapshot of oldQuerySnapshot.docs) {
+                try {
+                  const subjectData = docSnapshot.data();
+                  
+                  // Update the subject data with new structure
+                  const { div: _, ...subjectDataWithoutDiv } = subjectData;
+                  const updatedSubjectData = {
+                    ...subjectDataWithoutDiv,
+                    year: mapping.newYear,
+                    sem: mapping.newSem,
+                    // Update the document ID to remove division
+                    id: docSnapshot.id.replace(`_${div}`, ''),
+                    migratedAt: serverTimestamp(),
+                    migratedFrom: oldPath
+                  };
+                  
+                  // Create new document in new structure
+                  const newSubjectRef = doc(db, newPath, updatedSubjectData.id);
+                  await setDoc(newSubjectRef, updatedSubjectData);
+                  
+                  console.log(`[subjectService] Migrated subject: ${updatedSubjectData.id}`);
+                  migratedCount++;
+                  
+                  // Optionally delete old document
+                  if (deleteOldData) {
+                    await deleteDoc(docSnapshot.ref);
+                    console.log(`[subjectService] Deleted old subject: ${docSnapshot.id}`);
+                  }
+                  
+                } catch (subjectError) {
+                  const errorMsg = `Error migrating subject ${docSnapshot.id}: ${subjectError}`;
+                  console.error(`[subjectService] ${errorMsg}`);
+                  errors.push(errorMsg);
+                }
+              }
+            }
+          } catch (pathError) {
+            // Handle error silently
+            // Continue with next path
+          }
+        }
+      }
+      
+      console.log(`[subjectService] Migration completed. Migrated: ${migratedCount}, Errors: ${errors.length}`);
+      
+      return {
+        success: errors.length === 0,
+        migrated: migratedCount,
+        errors: errors
+      };
+      
+    } catch (error) {
+      console.error('[subjectService] Error during migration:', error);
+      return {
+        success: false,
+        migrated: 0,
+        errors: [`Migration failed: ${error}`]
+      };
+    }
+  },
+
+  // Export subjects to Excel/CSV
+  async exportSubjects(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      const subjects = await this.getSubjectsByYearSem(batch, department, year, sem);
+      
+      if (subjects.length === 0) {
+        return {
+          success: false,
+          message: 'No subjects found for the specified criteria'
+        };
+      }
+
+      // Export only the required fields
+      const exportData = subjects.map(subject => ({
+        'Subject Code': subject.subjectCode,
+        'Subject Name': subject.subjectName,
+        'Subject Type': subject.subjectType,
+        'Department': subject.department,
+        'Year': subject.year,
+        'Semester': subject.sem
+      }));
+
+      const filename = `subjects_${batch}_${department}_${year}_${sem}.${format}`;
+      
+      return {
+        success: true,
+        data: exportData,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('[subjectService] Error exporting subjects:', error);
+      return {
+        success: false,
+        message: `Export failed: ${(error as any).message}`
+      };
     }
   }
 };

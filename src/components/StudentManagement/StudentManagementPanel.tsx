@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { userService, attendanceService } from '../../firebase/firestore';
 import { User, AttendanceLog } from '../../types';
-import { Upload, Download, Users, Plus, Trash2, Edit, Search, Filter, Calendar, FileText, BarChart3, Eye } from 'lucide-react';
+import { Upload, Download, Users, Plus, Trash2, Edit, Search, Filter, Calendar, FileText, BarChart3, Eye, X } from 'lucide-react';
+import { getDepartmentCode } from '../../utils/departmentMapping';
+import { getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
 interface StudentData {
   name: string;
@@ -21,7 +23,6 @@ interface StudentManagementPanelProps {
 }
 
 const YEARS = ['1st', '2nd', '3rd', '4th'];
-const SEMS = ['1', '2', '3', '4', '5', '6', '7', '8'];
 const DIVS = ['A', 'B', 'C', 'D'];
 const DEPARTMENTS = ['Computer Science', 'Information Technology', 'Mechanical', 'Electrical', 'Civil'];
 
@@ -33,6 +34,22 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
   const [selectedYear, setSelectedYear] = useState('2nd');
   const [selectedSem, setSelectedSem] = useState('3');
   const [selectedDiv, setSelectedDiv] = useState('A');
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('2'));
+  const [formAvailableSemesters, setFormAvailableSemesters] = useState<string[]>(getAvailableSemesters('2'));
+
+  // Handle year change to update available semesters
+  const handleYearChange = (newYear: string) => {
+    setSelectedYear(newYear);
+    const normalizedYear = newYear.replace(/(st|nd|rd|th)/i, '');
+    const newAvailableSemesters = getAvailableSemesters(normalizedYear);
+    setAvailableSemesters(newAvailableSemesters);
+    
+    // If current semester is not valid for new year, reset to first available
+    if (!isValidSemesterForYear(normalizedYear, selectedSem)) {
+      const defaultSem = getDefaultSemesterForYear(normalizedYear);
+      setSelectedSem(defaultSem);
+    }
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -53,6 +70,9 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  // Delete modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [studentToDelete, setStudentToDelete] = useState<User | null>(null);
 
   const [newStudent, setNewStudent] = useState<Partial<User>>({
     name: '',
@@ -80,30 +100,23 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
   const fetchStudents = async () => {
     setLoading(true);
     try {
-      let fetchedStudents = [];
-      try {
-        const organizedStudents = await userService.getStudentsFromOrganizedCollection(selectedYear, selectedSem, selectedDiv);
-        fetchedStudents = organizedStudents;
-      } catch (error) {
-        // Fallback to regular collection if organized collection doesn't exist
-        console.log('Organized collection not found, using regular collection');
-        const allStudents = await userService.getAllUsers();
-        fetchedStudents = allStudents.filter(student =>
-          student.year === selectedYear &&
-          student.sem === selectedSem &&
-          student.div === selectedDiv
-        );
-        // If no students match, show all students for the department
-        if (fetchedStudents.length === 0) {
-          fetchedStudents = allStudents.filter(student =>
-            student.department === user.department
-          );
-        }
-      }
-      // Always filter to only students
-      setStudents(fetchedStudents.filter(s => s.role === 'student'));
+      // Use the new batch structure to get students
+      const batch = '2025'; // Default batch year
+      const department = getDepartmentCode(user?.department || 'CSE');
+      
+      
+      const fetchedStudents = await userService.getStudentsByBatchDeptYearSemDiv(
+        batch,
+        department,
+        selectedYear,
+        selectedSem,
+        selectedDiv
+      );
+      
+      setStudents(fetchedStudents);
     } catch (error) {
-      console.error('Error fetching students:', error);
+      // Handle error silently
+      setStudents([]);
     } finally {
       setLoading(false);
     }
@@ -134,7 +147,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
       setImportFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (error: any) {
-      console.error('Error importing students:', error);
+      // Handle error silently
       alert(error.message || 'Error importing students. Please check the file format.');
     } finally {
       setUploading(false);
@@ -201,7 +214,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
           resolve(students);
           }
         } catch (error) {
-          console.error('Error parsing file:', error, 'File type:', file.type, 'File name:', file.name);
+          // Handle error silently
           reject(new Error('Failed to parse file. Please check the format and required columns.'));
         }
       };
@@ -248,8 +261,8 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
         lastLogin: '',
         loginCount: 0
       };
+      // Create student (automatically creates in batch structure)
       batch.push(userService.createUser(student));
-      batch.push(userService.createOrganizedStudentCollection(student));
       setUploadProgress(Math.round(((i + 1) / studentsData.length) * 100));
     }
     await Promise.all(batch);
@@ -288,9 +301,8 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
         loginCount: 0
       };
 
-      // Create in both regular users collection and organized collection
+      // Create student (automatically creates in batch structure)
       await userService.createUser(student);
-      await userService.createOrganizedStudentCollection(student);
       
       setShowAddModal(false);
       setNewStudent({
@@ -309,7 +321,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
       });
       fetchStudents();
     } catch (error) {
-      console.error('Error adding student:', error);
+      // Handle error silently
       alert('Error adding student');
     }
   };
@@ -322,19 +334,24 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
       setEditingStudent(null);
       fetchStudents();
     } catch (error) {
-      console.error('Error updating student:', error);
+      // Handle error silently
       alert('Error updating student');
     }
   };
 
   const deleteStudent = async (studentId: string) => {
-    if (!confirm('Are you sure you want to delete this student?')) return;
-
     try {
+      // Find full student to delete organized copy as well
+      const stu = students.find(s => s.id === studentId);
       await userService.deleteUser(studentId);
+      if (stu) {
+        await userService.deleteOrganizedStudentCollection(stu);
+      }
+      setShowDeleteModal(false);
+      setStudentToDelete(null);
       fetchStudents();
     } catch (error) {
-      console.error('Error deleting student:', error);
+      // Handle error silently
       alert('Error deleting student');
     }
   };
@@ -537,7 +554,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
           <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
           <select
             value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value)}
+            onChange={(e) => handleYearChange(e.target.value)}
             className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
           >
             {YEARS.map(year => (
@@ -552,7 +569,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
             onChange={(e) => setSelectedSem(e.target.value)}
             className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
           >
-            {SEMS.map(sem => (
+            {availableSemesters.map(sem => (
               <option key={sem} value={sem}>{sem}</option>
             ))}
           </select>
@@ -572,14 +589,22 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
               placeholder="Search students..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 pl-10 touch-manipulation"
+              className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 pl-10 pr-10 touch-manipulation focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-4 h-4"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -656,7 +681,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                     <Edit size={18} />
                   </button>
                   <button
-                    onClick={() => deleteStudent(student.id)}
+                    onClick={(e) => { e.stopPropagation(); setStudentToDelete(student); setShowDeleteModal(true); }}
                     className="text-red-600 hover:text-red-800"
                     aria-label="Delete student"
                   >
@@ -736,7 +761,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                         <Edit size={16} />
                       </button>
                       <button
-                        onClick={e => { e.stopPropagation(); deleteStudent(student.id); }}
+                        onClick={(e) => { e.stopPropagation(); setStudentToDelete(student); setShowDeleteModal(true); }}
                         className="text-red-600 hover:text-red-900"
                       >
                         <Trash2 size={16} />
@@ -881,7 +906,18 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                   <select
                     value={newStudent.year}
-                    onChange={(e) => setNewStudent({...newStudent, year: e.target.value})}
+                    onChange={(e) => {
+                      const newYear = e.target.value;
+                      const normalizedYear = newYear.replace(/(st|nd|rd|th)/i, '');
+                      const newAvailableSemesters = getAvailableSemesters(normalizedYear);
+                      const defaultSem = getDefaultSemesterForYear(normalizedYear);
+                      setFormAvailableSemesters(newAvailableSemesters);
+                      setNewStudent({
+                        ...newStudent, 
+                        year: newYear,
+                        sem: isValidSemesterForYear(normalizedYear, newStudent.sem || '') ? newStudent.sem : defaultSem
+                      });
+                    }}
                     className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {YEARS.map(year => (
@@ -896,7 +932,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                     onChange={(e) => setNewStudent({...newStudent, sem: e.target.value})}
                     className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
-                    {SEMS.map(sem => (
+                    {formAvailableSemesters.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
                     ))}
                   </select>
@@ -995,7 +1031,18 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                   <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
                   <select
                     value={editingStudent.year}
-                    onChange={(e) => setEditingStudent({...editingStudent, year: e.target.value})}
+                    onChange={(e) => {
+                      const newYear = e.target.value;
+                      const normalizedYear = newYear.replace(/(st|nd|rd|th)/i, '');
+                      const newAvailableSemesters = getAvailableSemesters(normalizedYear);
+                      const defaultSem = getDefaultSemesterForYear(normalizedYear);
+                      setFormAvailableSemesters(newAvailableSemesters);
+                      setEditingStudent({
+                        ...editingStudent, 
+                        year: newYear,
+                        sem: isValidSemesterForYear(normalizedYear, editingStudent.sem || '') ? editingStudent.sem : defaultSem
+                      });
+                    }}
                     className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
                     {YEARS.map(year => (
@@ -1010,7 +1057,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                     onChange={(e) => setEditingStudent({...editingStudent, sem: e.target.value})}
                     className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
-                    {SEMS.map(sem => (
+                    {formAvailableSemesters.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
                     ))}
                   </select>
@@ -1074,7 +1121,7 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
                     onChange={e => setExportSem(e.target.value)}
                     className="w-full border border-gray-300 rounded-lg p-2.5 sm:p-2 touch-manipulation"
                   >
-                    {SEMS.map(sem => (
+                    {availableSemesters.map(sem => (
                       <option key={sem} value={sem}>{sem}</option>
                     ))}
                   </select>
@@ -1222,6 +1269,41 @@ const StudentManagementPanel: React.FC<StudentManagementPanelProps> = ({ user })
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && studentToDelete && (
+        <div className="modal-mobile">
+          <div className="modal-content-mobile max-w-md">
+            <div className="p-4 lg:p-6">
+              <div className="flex items-center mb-4">
+                <div className="flex-shrink-0 w-10 h-10 mx-auto bg-red-100 rounded-full flex items-center justify-center">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Delete Student</h3>
+                <p className="text-sm text-gray-500 mb-6">
+                  Are you sure you want to delete "{studentToDelete.name}"? This will remove their record from both users and organized collections.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button
+                    onClick={() => { setShowDeleteModal(false); setStudentToDelete(null); }}
+                    className="btn-mobile bg-gray-500 hover:bg-gray-600 text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => deleteStudent(studentToDelete.id)}
+                    className="btn-mobile bg-red-600 hover:bg-red-700 text-white"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

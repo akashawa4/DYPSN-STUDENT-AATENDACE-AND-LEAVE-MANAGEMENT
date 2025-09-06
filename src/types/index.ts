@@ -74,6 +74,7 @@ export interface AttendanceLog {
   year?: string;
   sem?: string;
   div?: string;
+  studentYear?: string; // Student's academic year (2nd, 3rd, 4th) for batch path
 }
 
 export interface LeaveBalance {
@@ -109,4 +110,35 @@ export interface Notification {
   category?: 'leave' | 'attendance' | 'system' | 'announcement';
   priority?: 'low' | 'medium' | 'high';
   actionRequired?: boolean;
+}
+
+export interface Subject {
+  id: string;
+  subjectCode: string;
+  subjectName: string;
+  subjectType: 'Theory' | 'Practical' | 'Lab' | 'Project' | 'Seminar' | 'Tutorial';
+  credits: number;
+  hoursPerWeek: number;
+  department: string;
+  year: string;
+  sem: string;
+  div: string;
+  batch: string;
+  teacherId?: string;
+  teacherName?: string;
+  teacherEmail?: string;
+  description?: string;
+  objectives?: string[];
+  prerequisites?: string[];
+  syllabus?: string;
+  evaluationScheme?: {
+    internal: number;
+    external: number;
+    total: number;
+  };
+  isActive: boolean;
+  createdAt?: any; // Firestore timestamp
+  updatedAt?: any; // Firestore timestamp
+  createdBy?: string;
+  updatedBy?: string;
 }

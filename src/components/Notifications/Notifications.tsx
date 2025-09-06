@@ -32,7 +32,7 @@ const Notifications: React.FC<NotificationsProps> = ({ setCurrentPage }) => {
 
         setNotifications(userNotifications);
       } catch (error) {
-        console.error('Error loading notifications:', error);
+        // Handle error silently
       } finally {
         setLoading(false);
       }

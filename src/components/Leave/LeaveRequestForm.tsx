@@ -102,7 +102,7 @@ const LeaveRequestForm: React.FC = () => {
       setTimeout(() => setToast(null), 3500);
 
     } catch (error: any) {
-      console.error('Error submitting leave request:', error);
+      // Handle error silently
       setToast({
         type: 'error',
         text: error.message || 'Failed to submit leave request. Please try again.'

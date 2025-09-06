@@ -1,0 +1,11 @@
+Name,Email,Phone,Department,Designation,Qualification,Specialization,Experience,Joining Date,Address,Blood Group,Date of Birth,Gender,Active
+Dr. Rajesh Kumar,rajesh.kumar@college.edu,9876543210,CSE,Professor,Ph.D. Computer Science,Machine Learning,15,2020-01-15,123 Main Street Mumbai Maharashtra 400001,A+,1975-03-15,Male,true
+Prof. Priya Sharma,priya.sharma@college.edu,9876543211,CSE,Associate Professor,M.Tech Computer Science,Data Structures,12,2018-07-01,456 Park Avenue Delhi Delhi 110001,B+,1980-08-22,Female,true
+Dr. Amit Patel,amit.patel@college.edu,9876543212,IT,Assistant Professor,Ph.D. Information Technology,Database Systems,8,2021-06-15,789 Tech Park Bangalore Karnataka 560001,O+,1985-11-10,Male,true
+Ms. Sneha Gupta,sneha.gupta@college.edu,9876543213,CSE,Lecturer,M.Tech Software Engineering,Web Development,5,2022-01-10,321 Innovation Hub Pune Maharashtra 411001,AB+,1990-05-18,Female,true
+Dr. Vikram Singh,vikram.singh@college.edu,9876543214,ECE,Professor,Ph.D. Electronics,Embedded Systems,18,2015-03-01,654 Electronics Street Chennai Tamil Nadu 600001,B-,1972-12-05,Male,true
+Prof. Anjali Mehta,anjali.mehta@college.edu,9876543215,AI&ML,Associate Professor,Ph.D. Artificial Intelligence,Deep Learning,14,2017-08-20,987 AI Research Center Hyderabad Telangana 500001,A-,1983-07-12,Female,true
+Dr. Ravi Verma,ravi.verma@college.edu,9876543216,Data Science,Assistant Professor,Ph.D. Statistics,Big Data Analytics,9,2019-11-05,147 Data Science Lab Gurgaon Haryana 122001,O-,1987-02-28,Male,true
+Ms. Kavita Joshi,kavita.joshi@college.edu,9876543217,CSE,Senior Lecturer,M.Tech Computer Science,Cybersecurity,7,2020-09-01,258 Security Center Ahmedabad Gujarat 380001,AB-,1988-09-14,Female,true
+Dr. Sanjay Reddy,sanjay.reddy@college.edu,9876543218,IT,Professor,Ph.D. Information Systems,Cloud Computing,16,2016-04-10,369 Cloud Campus Kochi Kerala 682001,B+,1976-01-20,Male,true
+Prof. Meera Iyer,meera.iyer@college.edu,9876543219,ECE,Associate Professor,M.Tech Electronics,Signal Processing,11,2018-12-15,741 Signal Lab Jaipur Rajasthan 302001,A+,1981-06-08,Female,true
