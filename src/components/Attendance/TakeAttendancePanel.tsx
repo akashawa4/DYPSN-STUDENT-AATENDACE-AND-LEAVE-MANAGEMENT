@@ -326,7 +326,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
             ) : availableSubjects.length === 0 ? (
               <option value="">No subjects</option>
             ) : (
-              availableSubjects.map(sub => <option key={sub} value={sub}>{sub}</option>)
+              availableSubjects.map((sub, idx) => <option key={`${sub}-${idx}`} value={sub}>{sub}</option>)
             )}
           </select>
         </div>

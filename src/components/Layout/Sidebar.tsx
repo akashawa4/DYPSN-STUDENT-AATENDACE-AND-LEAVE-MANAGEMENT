@@ -35,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentPage, onPageC
       { id: 'apply-leave', label: 'Apply Leave', icon: PlusCircle },
       { id: 'my-leaves', label: 'My Leaves', icon: FileText },
       { id: 'my-attendance', label: 'My Attendance', icon: Calendar },
+      { id: 'my-results', label: 'My Results', icon: FileCheck },
       { id: 'notifications', label: 'Updates', icon: Bell },
     ];
 
@@ -42,6 +43,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, currentPage, onPageC
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'student-leaves', label: 'Student Leaves', icon: FileText },
       { id: 'student-attendance', label: 'Student Attendance', icon: Calendar },
+      { id: 'result-entry', label: 'Result Entry', icon: FileCheck },
       { id: 'notifications', label: 'Updates', icon: Bell },
       { id: 'leave-requests', label: 'Leave Approval Panel', icon: CheckCircle },
       { id: 'student-management', label: 'Student Management', icon: Users },

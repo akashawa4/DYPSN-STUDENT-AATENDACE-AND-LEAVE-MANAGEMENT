@@ -17,7 +17,9 @@ import {
   onSnapshot
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { User, LeaveRequest, AttendanceLog, Notification, Subject } from '../types';
+import type { DocumentData, QuerySnapshot } from 'firebase/firestore';
+import { User, LeaveRequest, AttendanceLog, Notification, Subject, ResultRecord } from '../types';
+import { getDepartmentCode } from '../utils/departmentMapping';
 
 // Collection names
 export const COLLECTIONS = {
@@ -26,6 +28,7 @@ export const COLLECTIONS = {
   LEAVE_REQUESTS: 'leaveRequests',
   LEAVE: 'leave',
   ATTENDANCE: 'attendance',
+  RESULTS: 'results',
   NOTIFICATIONS: 'notifications',
   AUDIT_LOGS: 'auditLogs',
   SETTINGS: 'settings',
@@ -93,22 +96,20 @@ export const buildBatchPath = {
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     const day = date.getDate().toString().padStart(2, '0');
     return `${COLLECTIONS.AUDIT_LOGS}/batch/${batch}/${department}/sems/${sem}/divs/${div}/${year}/${month}/${day}`;
+  },
+
+  // Build results path:
+  // /results/batch/{batch}/{department}/year/{studentYear}/sems/{sem}/divs/{div}/subjects/{subject}/{examType}
+  result: (batch: string, department: string, studentYear: string, sem: string, div: string, subject: string, examType: string) => {
+    return `${COLLECTIONS.RESULTS}/batch/${batch}/${department}/year/${studentYear}/sems/${sem}/divs/${div}/subjects/${subject}/${examType}`;
   }
 };
 
 // Helper function to get batch year from student year
 export const getBatchYear = (studentYear: string): string => {
   const currentYear = new Date().getFullYear();
-  const yearMap: { [key: string]: string } = {
-    '2': (currentYear + 2).toString(), // 2nd year students will graduate in 2 years
-    '3': (currentYear + 1).toString(), // 3rd year students will graduate in 1 year
-    '4': currentYear.toString(),        // 4th year students will graduate this year
-    'FE': (currentYear + 4).toString(), // First year students will graduate in 4 years
-    'SE': (currentYear + 3).toString(), // Second year students will graduate in 3 years
-    'TE': (currentYear + 2).toString(), // Third year students will graduate in 2 years
-    'BE': (currentYear + 1).toString()  // Final year students will graduate in 1 year
-  };
-  return yearMap[studentYear] || currentYear.toString();
+  // All students belong to the current year batch
+  return currentYear.toString();
 };
 
 // Helper function to get current batch year
@@ -3131,6 +3132,323 @@ export const rollNumberChangeService = {
   }
 };
 
+// Result Management
+export const resultService = {
+  // Create or update a result entry (Teacher/HOD access)
+  async upsertResult(result: Omit<ResultRecord, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }): Promise<string> {
+    const {
+      id,
+      userId,
+      userName,
+      rollNumber,
+      batch,
+      department,
+      year,
+      sem,
+      div,
+      subject,
+      examType,
+      marksObtained,
+      maxMarks,
+      percentage,
+      grade,
+      remarks
+    } = result;
+
+    const studentYear = year; // align with attendance path builder
+    const collectionPath = buildBatchPath.result(batch, department, studentYear, sem, div, subject, examType);
+
+    // Document id: rollNumber for hierarchical path
+    const docId = id || rollNumber;
+
+    // Prepare data object, filtering out undefined values
+    const resultData: any = {
+      id: docId,
+      userId,
+      userName: userName || '',
+      rollNumber,
+      batch,
+      department,
+      year,
+      sem,
+      div,
+      subject,
+      examType,
+      marksObtained,
+      maxMarks,
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp()
+    };
+
+    // Only add fields that have values
+    if (typeof percentage === 'number') {
+      resultData.percentage = percentage;
+    } else if (maxMarks > 0) {
+      resultData.percentage = (marksObtained / maxMarks) * 100;
+    }
+
+    if (grade && grade.trim()) {
+      resultData.grade = grade;
+    }
+
+    if (remarks && remarks.trim()) {
+      resultData.remarks = remarks;
+    }
+
+    // Write to hierarchical path
+    const ref = doc(collection(db, collectionPath), docId);
+    await setDoc(ref, resultData, { merge: true });
+
+    // Also write to flat collection for easy querying (like attendance system)
+    const flatRef = doc(collection(db, COLLECTIONS.RESULTS), `${batch}_${department}_${studentYear}_${sem}_${div}_${subject}_${examType}_${rollNumber}`);
+    await setDoc(flatRef, resultData, { merge: true });
+
+    return docId;
+  },
+
+  // Get class results by subject and exam type (Teacher/HOD)
+  async getClassResults(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    examType: string
+  ): Promise<ResultRecord[]> {
+    try {
+      const collectionPath = buildBatchPath.result(batch, department, year, sem, div, subject, examType);
+      const qSnap = await getDocs(collection(db, collectionPath));
+      return qSnap.docs.map(d => ({ id: d.id, ...d.data() } as ResultRecord));
+    } catch (err) {
+      console.error('Error getting class results:', err);
+      return [];
+    }
+  },
+
+  // Get a student's results across subjects/exams (similar to getAttendanceByUser)
+  async getMyResults(userId: string): Promise<ResultRecord[]> {
+    try {
+      console.log('Getting results for userId:', userId);
+
+      // Read user to get rollNumber fallback
+      const userDocRef = doc(db, COLLECTIONS.USERS, userId);
+      const userDocSnap = await getDoc(userDocRef);
+      const rollNumber = userDocSnap.exists() ? (userDocSnap.data() as any).rollNumber : undefined;
+      // Try to guess roll from userId if not present
+      const guessedRoll = rollNumber || (userId.match(/\d{2,}/)?.[0] ?? undefined);
+
+      const resultsRef = collection(db, COLLECTIONS.RESULTS);
+
+      // Run both queries in parallel: by userId and by rollNumber (if available)
+      const queries: Promise<QuerySnapshot<DocumentData>>[] = [];
+      queries.push(getDocs(query(resultsRef, where('userId', '==', userId))));
+      if (rollNumber) {
+        queries.push(getDocs(query(resultsRef, where('rollNumber', '==', String(rollNumber)))));
+      }
+
+      const snaps = await Promise.all(queries);
+      const merged: Record<string, ResultRecord> = {};
+      snaps.forEach(snap => {
+        snap.docs.forEach(d => {
+          const rec = { id: d.id, ...(d.data() as any) } as ResultRecord;
+          merged[d.id] = rec;
+        });
+      });
+
+      let records = Object.values(merged);
+      console.log('Found results (merged):', records.length);
+
+      // If still empty, backfill from hierarchical path once (like attendance organized lookup)
+      if (records.length === 0 && userDocSnap.exists()) {
+        const userData = userDocSnap.data() as any;
+        const batch = getBatchYear(userData.year || '1st');
+        const department = getDepartmentCode(userData.department);
+        const year = userData.year || '1st';
+        const sem = userData.sem || '1';
+        const div = userData.div || 'A';
+        const targetIdOrRoll = guessedRoll || userId;
+        console.log('Backfill scan:', { batch, department, year, sem, div, targetIdOrRoll });
+
+        // Get subjects first
+        const subjects = await subjectService.getSubjectsByDepartment(department, year, sem);
+        const examTypes = ['UT1', 'UT2', 'Practical', 'Viva', 'Midterm', 'Endsem'];
+        for (const s of subjects) {
+          for (const examType of examTypes) {
+            try {
+              const hierPath = buildBatchPath.result(batch, department, year, sem, div, s.subjectName, examType);
+              const marksSnap = await getDocs(collection(db, hierPath));
+              for (const d of marksSnap.docs) {
+                const data = d.data() as any;
+                if (data.userId === userId || data.rollNumber === targetIdOrRoll || d.id === targetIdOrRoll) {
+                  const rec = { id: d.id, ...data } as ResultRecord;
+                  merged[`${batch}_${department}_${year}_${sem}_${div}_${s.subjectName}_${examType}_${d.id}`] = rec;
+                  // Mirror into flat collection for future fast queries
+                  const flatId = `${batch}_${department}_${year}_${sem}_${div}_${s.subjectName}_${examType}_${d.id}`;
+                  await setDoc(doc(collection(db, COLLECTIONS.RESULTS), flatId), rec, { merge: true });
+                }
+              }
+            } catch {}
+          }
+        }
+        records = Object.values(merged);
+        console.log('Backfill found:', records.length);
+      }
+
+      // Sort newest updated first if available
+      return records.sort((a, b) => {
+        const aT = (a.updatedAt as any)?.toDate?.() || new Date(a.updatedAt || 0);
+        const bT = (b.updatedAt as any)?.toDate?.() || new Date(b.updatedAt || 0);
+        return bT.getTime() - aT.getTime();
+      });
+    } catch (error) {
+      console.error('Error getting user results:', error);
+      return [];
+    }
+  },
+
+  // Get a student's results filtered by subject and exam type
+  async getMyResultsBySubjectExam(userId: string, subject: string, examType?: string): Promise<ResultRecord[]> {
+    const allResults = await this.getMyResults(userId);
+    
+    // Filter by subject and exam type
+    let filtered = allResults.filter(r => r.subject === subject);
+    if (examType) {
+      filtered = filtered.filter(r => r.examType === examType);
+    }
+    
+    return filtered;
+  },
+
+  // Export results by batch (for teachers/HOD)
+  async exportResultsByBatch(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    examType: string,
+    format: 'xlsx' | 'csv' = 'xlsx'
+  ): Promise<{ success: boolean; data?: any; filename?: string; message?: string }> {
+    try {
+      const results = await this.getClassResults(batch, department, year, sem, div, subject, examType);
+      
+      if (results.length === 0) {
+        return {
+          success: false,
+          message: 'No results found for the specified criteria'
+        };
+      }
+
+      const exportData = results.map(result => ({
+        'Roll Number': result.rollNumber,
+        'Student Name': result.userName || '',
+        'Subject': result.subject,
+        'Exam Type': result.examType,
+        'Marks Obtained': result.marksObtained,
+        'Max Marks': result.maxMarks,
+        'Percentage': typeof result.percentage === 'number' ? `${result.percentage.toFixed(1)}%` : '',
+        'Year': result.year,
+        'Semester': result.sem,
+        'Division': result.div,
+        'Batch': result.batch,
+        'Department': result.department
+      }));
+
+      const filename = `results_${batch}_${department}_${year}_${sem}_${div}_${subject}_${examType}.${format}`;
+
+      return {
+        success: true,
+        data: exportData,
+        filename: filename
+      };
+    } catch (error) {
+      console.error('Error exporting results:', error);
+      return {
+        success: false,
+        message: `Export failed: ${error}`
+      };
+    }
+  },
+
+  // Import results by batch (for teachers/HOD)
+  async importResultsByBatch(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string,
+    resultsData: any[]
+  ): Promise<{ success: boolean; imported: number; errors: string[] }> {
+    const errors: string[] = [];
+    let imported = 0;
+
+    try {
+      for (const row of resultsData) {
+        try {
+          const rollNumber = String(row.rollNumber || row.roll || '').trim();
+          if (!rollNumber) {
+            errors.push(`Row ${resultsData.indexOf(row) + 1}: Missing roll number`);
+            continue;
+          }
+
+          const subject = String(row.subject || '').trim();
+          if (!subject) {
+            errors.push(`Row ${resultsData.indexOf(row) + 1}: Missing subject`);
+            continue;
+          }
+
+          const examType = String(row.examType || row.exam || '').trim();
+          if (!examType) {
+            errors.push(`Row ${resultsData.indexOf(row) + 1}: Missing exam type`);
+            continue;
+          }
+
+          const marksObtained = Number(row.marksObtained || row.obtained || row.marks || 0);
+          const maxMarks = Number(row.maxMarks || row.total || row.max || 20);
+
+          if (isNaN(marksObtained) || isNaN(maxMarks) || marksObtained < 0 || maxMarks <= 0) {
+            errors.push(`Row ${resultsData.indexOf(row) + 1}: Invalid marks (${marksObtained}/${maxMarks})`);
+            continue;
+          }
+
+          await this.upsertResult({
+            userId: rollNumber, // fallback if student not found
+            userName: String(row.name || row.studentName || ''),
+            rollNumber,
+            batch,
+            department,
+            year,
+            sem,
+            div,
+            subject,
+            examType,
+            marksObtained,
+            maxMarks
+          });
+
+          imported++;
+        } catch (error) {
+          errors.push(`Row ${resultsData.indexOf(row) + 1}: ${error}`);
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        imported,
+        errors
+      };
+    } catch (error) {
+      return {
+        success: false,
+        imported: 0,
+        errors: [`Import failed: ${error}`]
+      };
+    }
+  }
+};
+
 // Batch Migration Service with Department Support
 export const batchMigrationService = {
   // Migrate existing data to batch 2025 with department structure
@@ -3838,8 +4156,15 @@ export const subjectService = {
       }
       
       // Apply year filter if provided
-      const finalSubjects = year ? subjects.filter(s => String((s as any).year || '').trim() === String(year).trim()) : subjects;
+      let finalSubjects = year ? subjects.filter(s => String((s as any).year || '').trim() === String(year).trim()) : subjects;
       console.log(`[subjectService] Final subjects after year filter: ${finalSubjects.length}`);
+      
+      // If no subjects found with exact year match, try without year filter
+      if (finalSubjects.length === 0 && year) {
+        console.log(`[subjectService] No subjects found for year ${year}, returning all subjects for department`);
+        finalSubjects = subjects;
+      }
+      
       return finalSubjects;
     } catch (error) {
       console.error('[subjectService] Error getting subjects by department:', error);

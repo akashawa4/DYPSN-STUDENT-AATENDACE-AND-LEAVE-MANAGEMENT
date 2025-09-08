@@ -52,7 +52,7 @@ const teacherPath = buildBatchPath.teacher(batch, sem, div);
 ```typescript
 // Automatically calculate batch year from student year
 const batch = getBatchYear('3'); // Returns '2027' for 2025
-const batch = getBatchYear('FE'); // Returns '2029' for 2025
+const batch = getBatchYear('FE'); // Returns '' for 2025
 ```
 
 ### 3. Current Batch Year (`getCurrentBatchYear`)
@@ -363,7 +363,7 @@ service cloud.firestore {
 ```typescript
 // Test batch year calculation
 expect(getBatchYear('3')).toBe('2027');
-expect(getBatchYear('FE')).toBe('2029');
+expect(getBatchYear('FE')).toBe('');
 
 // Test path building
 expect(buildBatchPath.student('2027', '5', 'A'))

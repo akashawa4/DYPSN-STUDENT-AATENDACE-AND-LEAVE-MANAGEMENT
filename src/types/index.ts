@@ -142,3 +142,24 @@ export interface Subject {
   createdBy?: string;
   updatedBy?: string;
 }
+
+export interface ResultRecord {
+  id: string;
+  userId: string;
+  userName?: string;
+  rollNumber: string;
+  batch: string; // e.g., 2025
+  department: string; // e.g., CSE
+  year: string; // e.g., 4th
+  sem: string; // e.g., 7
+  div: string; // e.g., B
+  subject: string; // e.g., Internship
+  examType: string; // e.g., UT1 | UT2 | Practical
+  marksObtained: number;
+  maxMarks: number;
+  percentage?: number;
+  grade?: string;
+  remarks?: string;
+  createdAt?: any; // Firestore timestamp
+  updatedAt?: any; // Firestore timestamp
+}

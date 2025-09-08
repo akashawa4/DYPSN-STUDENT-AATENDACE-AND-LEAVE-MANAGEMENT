@@ -16,6 +16,8 @@ import StudentManagementPanel from './components/StudentManagement/StudentManage
 import TeacherStudentPanel from './components/StudentManagement/TeacherStudentPanel';
 import TeacherManagementPanel from './components/TeacherManagement/TeacherManagementPanel';
 import SubjectManagementPanel from './components/SubjectManagement/SubjectManagementPanel';
+import ResultEntryPanel from './components/Results/ResultEntryPanel';
+import MyResults from './components/Results/MyResults';
 import { Upload, BarChart3, Users, Calendar, FileText } from 'lucide-react';
 import StudentProfile from './components/StudentProfile';
 import TakeAttendancePanel from './components/Attendance/TakeAttendancePanel';
@@ -377,6 +379,13 @@ const AppContent: React.FC = () => {
         return <MyAttendance />;
       case 'student-attendance':
         return <MyAttendance />;
+      case 'my-results':
+        return <MyResults />;
+      case 'result-entry':
+        if (user.role === 'teacher' || user.role === 'hod') {
+          return <ResultEntryPanel />;
+        }
+        return <Dashboard onPageChange={setCurrentPage} />;
       case 'esl-integration':
         return <ESLBiometricIntegration />;
       case 'notifications':

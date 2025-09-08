@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, FileText, CheckCircle, AlertCircle, X, Calendar, TrendingUp, User, MapPin, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { leaveService, attendanceService } from '../../firebase/firestore';
+import { leaveService, attendanceService, userService, getBatchYear } from '../../firebase/firestore';
+import { getDepartmentCode } from '../../utils/departmentMapping';
 import { LeaveRequest } from '../../types';
 
 interface DetailModalProps {
@@ -62,6 +63,9 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
   const [selectedYear, setSelectedYear] = useState<string>('');
   const [selectedSemester, setSelectedSemester] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
+  // Local student aggregates for Teacher/HOD when props are not passed
+  const [localStudentData, setLocalStudentData] = useState<Array<{ year: string; sem: string; div: string; count: number; students: any[] }>>([]);
+  const [localTotalStudents, setLocalTotalStudents] = useState<number>(0);
 
 
   // Load user's leave requests for stats
@@ -80,6 +84,48 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     };
     loadLeaveRequests();
   }, [user]);
+
+  // Load students for Teacher/HOD directly from batch structure
+  useEffect(() => {
+    const loadStudentsForStaff = async () => {
+      if (!user || (user.role !== 'teacher' && user.role !== 'hod')) return;
+      try {
+        // Determine batch/year/sem/div scope
+        const dept = getDepartmentCode(user.department);
+        // Current batch based on user year (falls back to current year)
+        const batch = getBatchYear(user.year || '4th');
+        const years = ['2nd', '3rd', '4th'];
+        const semsByYear: Record<string, string[]> = { '2nd': ['3','4'], '3rd': ['5','6'], '4th': ['7','8'] };
+        const divs = ['A','B','C','D'];
+        const aggregates: Array<{ year: string; sem: string; div: string; count: number; students: any[] }> = [];
+        let total = 0;
+
+        for (const y of years) {
+          const sems = semsByYear[y] || [];
+          for (const s of sems) {
+            for (const d of divs) {
+              try {
+                const students = await userService.getStudentsByBatchDeptYearSemDiv(batch, dept, y, s, d);
+                if (students.length > 0) {
+                  aggregates.push({ year: y, sem: s, div: d, count: students.length, students });
+                  total += students.length;
+                }
+              } catch {
+                // ignore missing collections
+              }
+            }
+          }
+        }
+
+        setLocalStudentData(aggregates);
+        setLocalTotalStudents(total);
+      } catch (e) {
+        setLocalStudentData([]);
+        setLocalTotalStudents(0);
+      }
+    };
+    loadStudentsForStaff();
+  }, [user?.id]);
 
   // Calculate stats from real data
   const calculateStats = () => {
@@ -176,19 +222,24 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     }
 
     // Teacher/HOD stats with real student data - only for teachers/HODs
-    if ((user.role === 'teacher' || user.role === 'hod') && studentData && totalStudents !== undefined) {
+    const effectiveStudentData = (studentData && studentData.length > 0) ? studentData : localStudentData;
+    // Always compute total from the aggregated buckets to avoid stale state
+    const effectiveTotalStudents = (studentData && studentData.length > 0)
+      ? studentData.reduce((sum, d) => sum + (d.count || 0), 0)
+      : localStudentData.reduce((sum, d) => sum + (d.count || 0), 0);
+    if ((user.role === 'teacher' || user.role === 'hod') && effectiveStudentData && effectiveStudentData.length >= 0) {
       
-      const year2Count = studentData.filter(d => {
+      const year2Count = effectiveStudentData.filter(d => {
         const year = d.year?.toString().toLowerCase();
         return year === '2' || year?.includes('2') || year?.includes('2nd') || year?.includes('second');
       }).reduce((sum, d) => sum + d.count, 0);
       
-      const year3Count = studentData.filter(d => {
+      const year3Count = effectiveStudentData.filter(d => {
         const year = d.year?.toString().toLowerCase();
         return year === '3' || year?.includes('3') || year?.includes('3rd') || year?.includes('third');
       }).reduce((sum, d) => sum + d.count, 0);
       
-      const year4Count = studentData.filter(d => {
+      const year4Count = effectiveStudentData.filter(d => {
         const year = d.year?.toString().toLowerCase();
         return year === '4' || year?.includes('4') || year?.includes('4th') || year?.includes('fourth');
       }).reduce((sum, d) => sum + d.count, 0);
@@ -198,7 +249,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
         {
           id: 'students',
           title: 'Total Students',
-          value: totalStudents.toString(),
+          value: (effectiveTotalStudents || 0).toString(),
           change: 'CSE Department',
           changeType: 'positive' as const,
           icon: User,
@@ -521,6 +572,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     }
   };
 
+  // Prefer props if provided; otherwise use locally loaded aggregates
   const stats = calculateStats();
 
   const getColorClasses = (color: string) => {
