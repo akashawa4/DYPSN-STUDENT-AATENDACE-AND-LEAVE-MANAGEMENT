@@ -5,10 +5,10 @@ import {
   Calendar, 
   Bell, 
   User,
-  PlusCircle,
   CheckCircle,
   Users,
-  GraduationCap
+  GraduationCap,
+  BarChart3
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -23,9 +23,9 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentPage, onPageCh
   const getNavigationItems = () => {
     const studentItems = [
       { id: 'dashboard', label: 'Home', icon: Home },
-      { id: 'apply-leave', label: 'Apply', icon: PlusCircle },
       { id: 'my-leaves', label: 'Leaves', icon: FileText },
       { id: 'my-attendance', label: 'Attendance', icon: Calendar },
+      { id: 'my-results', label: 'Results', icon: BarChart3 },
       { id: 'profile', label: 'Profile', icon: User },
     ];
 
