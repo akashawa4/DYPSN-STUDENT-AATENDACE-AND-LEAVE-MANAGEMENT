@@ -446,7 +446,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar - Hidden on mobile, shown on desktop */}
       <Sidebar 
         isOpen={sidebarOpen} 
@@ -456,7 +456,7 @@ const AppContent: React.FC = () => {
       />
       
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden lg:ml-4">
+      <div className="flex-1 flex flex-col lg:ml-4">
         <Header
           onMenuClick={() => setSidebarOpen(true)}
           onProfileClick={() => setCurrentPage('profile')}
@@ -465,11 +465,9 @@ const AppContent: React.FC = () => {
           setShowNotifications={setShowNotifications}
         />
         
-        {/* Main Content with Mobile Scrolling */}
-        <main className="flex-1 overflow-mobile pb-20 lg:pb-0 scroll-smooth-mobile">
-          <div className="min-h-full">
-            {renderPage()}
-          </div>
+        {/* Main Content */}
+        <main className="flex-1 pb-24 lg:pb-0">
+          {renderPage()}
         </main>
 
         {/* Footer */}
