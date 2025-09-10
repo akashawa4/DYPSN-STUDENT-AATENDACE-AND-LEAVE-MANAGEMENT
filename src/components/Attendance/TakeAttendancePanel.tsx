@@ -16,10 +16,10 @@ interface TakeAttendancePanelProps {
 
 const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotification }) => {
   const { user } = useAuth();
-  const [year, setYear] = useState('1st');
-  const [sem, setSem] = useState('1');
+  const [year, setYear] = useState('2nd');
+  const [sem, setSem] = useState('3');
   const [div, setDiv] = useState('A');
-  const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('1'));
+  const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('2'));
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [subject, setSubject] = useState<string>('');
@@ -32,8 +32,6 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [absent, setAbsent] = useState<User[]>([]);
   const [students, setStudents] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  const [teachers, setTeachers] = useState<User[]>([]);
-  const [selectedTeacher, setSelectedTeacher] = useState('');
 
   const todayDate = new Date();
   const todayStr = todayDate.toISOString().split('T')[0];
@@ -76,13 +74,6 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
       setLoading(false);
     };
     fetchStudents();
-    // Fetch teachers for dropdown
-    const fetchTeachers = async () => {
-      const teacherList = await userService.getUsersByRole('teacher');
-      setTeachers(teacherList);
-      if (teacherList.length > 0) setSelectedTeacher(teacherList[0].id);
-    };
-    fetchTeachers();
   }, [year, sem, div]);
 
   // Load subjects dynamically based on filters (ignore div for subjects)
@@ -293,12 +284,15 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
       </div>
 
       <form className="grid grid-cols-1 md:grid-cols-2 gap-4" onSubmit={handleSubmit}>
-        {/* Teacher Dropdown */}
+        {/* Teacher Name (Read-only) */}
         <div>
           <label className="block text-sm font-medium text-gray-700">Teacher</label>
-          <select value={selectedTeacher} onChange={e => setSelectedTeacher(e.target.value)} className="mt-1 block w-full border rounded p-2">
-            {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+          <input 
+            type="text" 
+            value={user?.name || ''} 
+            className="mt-1 block w-full border rounded p-2 bg-gray-50 text-gray-600" 
+            readOnly 
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Year</label>
