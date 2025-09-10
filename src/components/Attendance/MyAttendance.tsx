@@ -558,7 +558,7 @@ const MyAttendance: React.FC = () => {
   const calendarDays = getCalendarDays();
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-6 px-4 sm:px-6 lg:px-8">
       {/* Improved Filter & Export Controls Row */}
       <div className="flex flex-wrap items-center gap-2 mb-4 p-2 bg-white rounded-lg border border-gray-200">
         <div>

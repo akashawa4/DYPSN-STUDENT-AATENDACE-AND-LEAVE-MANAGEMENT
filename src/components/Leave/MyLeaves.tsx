@@ -224,18 +224,18 @@ const MyLeaves: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 px-4 sm:px-6 lg:px-8">
+        <div className="space-y-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {user?.role === 'teacher' || user?.role === 'hod' ? 'Student Leaves' : 'My Leaves'}
             </h1>
-            <p className="text-gray-600">Track and manage your leave requests</p>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Track and manage your leave requests</p>
           </div>
         </div>
-        <div className="flex items-center justify-center py-12">
+        <div className="flex items-center justify-center py-12 bg-white rounded-lg border border-gray-200 shadow-sm">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2 text-gray-600">
+          <span className="ml-2 text-sm text-gray-600">
             {user?.role === 'teacher' || user?.role === 'hod' 
               ? `Loading leaves for ${year}/${sem}/${div}...` 
               : 'Loading leave requests...'
@@ -248,23 +248,23 @@ const MyLeaves: React.FC = () => {
 
   if (error) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="space-y-6 px-4 sm:px-6 lg:px-8">
+        <div className="space-y-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
               {user?.role === 'teacher' || user?.role === 'hod' ? 'Student Leaves' : 'My Leaves'}
             </h1>
-            <p className="text-gray-600">Track and manage your leave requests</p>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Track and manage your leave requests</p>
           </div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-sm">
           <div className="flex items-center">
             <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
-            <span className="text-red-800">{error}</span>
+            <span className="text-sm text-red-800">{error}</span>
           </div>
           <button 
             onClick={() => window.location.reload()} 
-            className="mt-2 text-sm text-red-600 hover:text-red-800 underline"
+            className="mt-2 text-sm text-red-600 hover:text-red-800 underline touch-manipulation"
           >
             Try again
           </button>
@@ -274,142 +274,186 @@ const MyLeaves: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 px-4 sm:px-6 lg:px-8">
+      {/* Header - Mobile Optimized */}
+      <div className="space-y-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             {user?.role === 'teacher' || user?.role === 'hod' ? 'Student Leaves' : 'My Leaves'}
           </h1>
-          <p className="text-gray-600">Track and manage your leave requests</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Track and manage your leave requests</p>
         </div>
-        <button className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700" onClick={handleExportLeaves}>
+        <button 
+          className="w-full sm:w-auto flex items-center justify-center space-x-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 touch-manipulation transition-colors" 
+          onClick={handleExportLeaves}
+        >
           <Download className="w-4 h-4" />
-          <span>Export</span>
+          <span>Export Leaves</span>
         </button>
       </div>
-      {/* Year/Sem/Div dropdowns for teacher/HOD only */}
+      {/* Year/Sem/Div dropdowns for teacher/HOD only - Mobile Optimized */}
       {(user?.role === 'teacher' || user?.role === 'hod') && (
-        <div className="flex flex-wrap gap-2 mb-2">
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Year</label>
-            <select value={year} onChange={e => handleYearChange(e.target.value)} className="mt-1 block border rounded p-2">
-              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Semester</label>
-            <select value={sem} onChange={e => setSem(e.target.value)} className="mt-1 block border rounded p-2">
-              {availableSemesters.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Division</label>
-            <select value={div} onChange={e => setDiv(e.target.value)} className="mt-1 block border rounded p-2">
-              {DIVS.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+        <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+          <h3 className="text-sm font-medium text-gray-700 mb-3">Filter by Class</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <select 
+                value={year} 
+                onChange={e => handleYearChange(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
+              >
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Semester</label>
+              <select 
+                value={sem} 
+                onChange={e => setSem(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
+              >
+                {availableSemesters.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Division</label>
+              <select 
+                value={div} 
+                onChange={e => setDiv(e.target.value)} 
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 touch-manipulation"
+              >
+                {DIVS.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
+      {/* Stats Cards - Mobile Optimized */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Total Requests</p>
-              <p className="text-2xl font-bold text-gray-900">{leaveStats.total}</p>
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 mb-1">Total Requests</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900">{leaveStats.total}</p>
             </div>
-            <Calendar className="w-8 h-8 text-blue-600" />
+            <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" />
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Approved</p>
-              <p className="text-2xl font-bold text-green-600">{leaveStats.approved}</p>
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 mb-1">Approved</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">{leaveStats.approved}</p>
             </div>
-            <CheckCircle className="w-8 h-8 text-green-600" />
+            <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 flex-shrink-0" />
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Pending</p>
-              <p className="text-2xl font-bold text-amber-600">{leaveStats.pending}</p>
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 mb-1">Pending</p>
+              <p className="text-lg sm:text-2xl font-bold text-amber-600">{leaveStats.pending}</p>
             </div>
-            <Clock className="w-8 h-8 text-amber-600" />
+            <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" />
           </div>
         </div>
-        <div className="bg-white p-4 rounded-lg border border-gray-200">
+        <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-600">Rejected/Returned</p>
-              <p className="text-2xl font-bold text-red-600">{leaveStats.rejected}</p>
+            <div className="flex-1">
+              <p className="text-xs text-gray-600 mb-1">Rejected/Returned</p>
+              <p className="text-lg sm:text-2xl font-bold text-red-600">{leaveStats.rejected}</p>
             </div>
-            <XCircle className="w-8 h-8 text-red-600" />
+            <XCircle className="w-6 h-6 sm:w-8 sm:h-8 text-red-600 flex-shrink-0" />
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg border border-gray-200">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
+      {/* Filters - Mobile Optimized */}
+      <div className="bg-white p-3 sm:p-4 rounded-lg border border-gray-200 shadow-sm">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Search & Filter</h3>
+        <div className="space-y-3">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
               type="text"
               placeholder="Search by reason or ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm touch-manipulation"
             />
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Status</option>
-            <option value="approved">Approved</option>
-            <option value="pending">Pending</option>
-            <option value="rejected">Rejected</option>
-            <option value="returned">Returned</option>
-          </select>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="all">All Types</option>
-            <option value="SL">Sick Leave</option>
-            <option value="CL">Casual Leave</option>
-            <option value="OD">On Duty</option>
-            <option value="ML">Medical Leave</option>
-            <option value="OTH">Other</option>
-          </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm touch-manipulation"
+            >
+              <option value="all">All Status</option>
+              <option value="approved">Approved</option>
+              <option value="pending">Pending</option>
+              <option value="rejected">Rejected</option>
+              <option value="returned">Returned</option>
+            </select>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm touch-manipulation"
+            >
+              <option value="all">All Types</option>
+              <option value="SL">Sick Leave</option>
+              <option value="CL">Casual Leave</option>
+              <option value="OD">On Duty</option>
+              <option value="ML">Medical Leave</option>
+              <option value="OTH">Other</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Mobile Cards */}
+      {/* Mobile Cards - Enhanced */}
       <div className="md:hidden space-y-3">
         {filteredLeaves.map((leave) => (
-          <div key={leave.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-mobile" onClick={() => setSelectedLeave(leave)}>
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="font-semibold text-gray-900">{getLeaveTypeName(leave.leaveType)}</span>
-                  <span className="text-xs text-gray-500">{leave.id}</span>
+          <div 
+            key={leave.id} 
+            className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm active:bg-gray-50 touch-manipulation" 
+            onClick={() => setSelectedLeave(leave)}
+          >
+            <div className="space-y-3">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="font-semibold text-gray-900 text-sm">{getLeaveTypeName(leave.leaveType)}</span>
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">{leave.id}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 line-clamp-2">{leave.reason}</p>
                 </div>
-                <p className="text-sm text-gray-600 mt-1 line-clamp-2">{leave.reason}</p>
+                <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(leave.status)} flex-shrink-0`}>
+                  {getStatusIcon(leave.status)}
+                  <span className="capitalize">{leave.status}</span>
+                </div>
               </div>
-              <div className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(leave.status)}`}>
-                {getStatusIcon(leave.status)}
-                <span className="capitalize">{leave.status}</span>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 p-2 rounded-lg">
+                  <p className="text-xs text-gray-600">Duration</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {new Date(leave.fromDate).toLocaleDateString()} - {new Date(leave.toDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="bg-gray-50 p-2 rounded-lg">
+                  <p className="text-xs text-gray-600">Days</p>
+                  <p className="text-sm font-medium text-gray-900">{leave.daysCount} day{leave.daysCount > 1 ? 's' : ''}</p>
+                </div>
               </div>
-            </div>
-            <div className="mt-3 text-xs text-gray-600 flex items-center justify-between">
-              <span>{new Date(leave.fromDate).toLocaleDateString()} - {new Date(leave.toDate).toLocaleDateString()}</span>
-              <span>{leave.daysCount} day{leave.daysCount > 1 ? 's' : ''}</span>
+              
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <span>Submitted: {new Date(leave.submittedAt).toLocaleDateString()}</span>
+                {leave.approvedBy && (
+                  <span>Approved by: {leave.approvedBy}</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -501,66 +545,66 @@ const MyLeaves: React.FC = () => {
       </div>
 
       {filteredLeaves.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
-          <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No leave records found</h3>
-          <p className="text-gray-600">Try adjusting your search or filter criteria</p>
+        <div className="text-center py-8 sm:py-12 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <Calendar className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">No leave records found</h3>
+          <p className="text-sm text-gray-600">Try adjusting your search or filter criteria</p>
         </div>
       )}
 
-      {/* Leave Detail Modal */}
+      {/* Leave Detail Modal - Mobile Optimized */}
       {selectedLeave && (
-        <div className="modal-mobile">
-          <div className="modal-content-mobile md:max-w-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-xl font-semibold text-gray-900">Leave Request Details</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Leave Request Details</h3>
               <button
                 onClick={() => setSelectedLeave(null)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
+                className="p-2 hover:bg-gray-100 rounded-lg touch-manipulation"
               >
                 <XCircle className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Request ID</label>
-                  <p className="text-lg font-semibold text-gray-900">{selectedLeave.id}</p>
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Request ID</label>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900">{selectedLeave.id}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Leave Type</label>
-                  <p className="text-lg font-semibold text-gray-900">{getLeaveTypeName(selectedLeave.leaveType)}</p>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Leave Type</label>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900">{getLeaveTypeName(selectedLeave.leaveType)}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">From Date</label>
-                  <p className="text-lg font-semibold text-gray-900">{new Date(selectedLeave.fromDate).toLocaleDateString()}</p>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-1">From Date</label>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900">{new Date(selectedLeave.fromDate).toLocaleDateString()}</p>
                 </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">To Date</label>
-                  <p className="text-lg font-semibold text-gray-900">{new Date(selectedLeave.toDate).toLocaleDateString()}</p>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-1">To Date</label>
+                  <p className="text-sm sm:text-base font-semibold text-gray-900">{new Date(selectedLeave.toDate).toLocaleDateString()}</p>
                 </div>
               </div>
               
-              <div>
-                <label className="text-sm font-medium text-gray-500">Reason</label>
-                <p className="text-gray-900 mt-1">{selectedLeave.reason}</p>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 block mb-2">Reason</label>
+                <p className="text-sm text-gray-900">{selectedLeave.reason}</p>
               </div>
 
-              <div className="flex items-center space-x-2">
-                <label className="text-sm font-medium text-gray-500">Status:</label>
-                <div className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(selectedLeave.status)}`}>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <label className="text-xs font-medium text-gray-500 block mb-2">Status</label>
+                <div className={`inline-flex items-center space-x-1 px-3 py-2 rounded-full text-sm font-medium border ${getStatusColor(selectedLeave.status)}`}>
                   {getStatusIcon(selectedLeave.status)}
                   <span className="capitalize">{selectedLeave.status}</span>
                 </div>
               </div>
 
               {selectedLeave.approvalFlow && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Approval Flow</label>
-                  <div className="mt-2 space-y-2">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-2">Approval Flow</label>
+                  <div className="space-y-2">
                     {selectedLeave.approvalFlow.map((step, index) => (
                       <div key={index} className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-gray-700">{index + 1}.</span>
+                        <span className="text-xs font-medium text-gray-700 bg-white px-2 py-1 rounded-full">{index + 1}</span>
                         <span className="text-sm text-gray-900">{step}</span>
                       </div>
                     ))}
@@ -569,19 +613,19 @@ const MyLeaves: React.FC = () => {
               )}
 
               {selectedLeave.approvedBy && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Final Approved By</label>
-                  <p className="text-gray-900 mt-1">{selectedLeave.approvedBy}</p>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Final Approved By</label>
+                  <p className="text-sm font-semibold text-gray-900">{selectedLeave.approvedBy}</p>
                   {selectedLeave.approvedAt && (
-                    <p className="text-sm text-gray-600">on {new Date(selectedLeave.approvedAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-gray-600 mt-1">on {new Date(selectedLeave.approvedAt).toLocaleDateString()}</p>
                   )}
                 </div>
               )}
 
               {selectedLeave.remarks && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Remarks</label>
-                  <p className="text-gray-900 mt-1 p-3 bg-gray-50 rounded-lg">{selectedLeave.remarks}</p>
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <label className="text-xs font-medium text-gray-500 block mb-2">Remarks</label>
+                  <p className="text-sm text-gray-900">{selectedLeave.remarks}</p>
                 </div>
               )}
             </div>
