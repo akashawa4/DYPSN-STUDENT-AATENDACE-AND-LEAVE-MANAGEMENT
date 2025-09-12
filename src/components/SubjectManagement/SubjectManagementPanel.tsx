@@ -318,16 +318,23 @@ const SubjectManagementPanel: React.FC = () => {
       const subjects = jsonData.map((row: any) => {
         const getValue = (key: string) => row[key] || row[key.toLowerCase()] || '';
         
+        const dept = getDepartmentCode(String(getValue('Department') || user?.department || 'CSE'));
+        const yearVal = formatYear(String(getValue('Year') || filterYear));
+        const semVal = String(getValue('Semester') || filterSem);
+        const code = String(getValue('Subject Code')).trim();
+        const name = String(getValue('Subject Name') || '').trim();
+        const type = String(getValue('Subject Type') || 'Theory');
+        
         return {
-          id: `${getValue('Subject Code')}_2025_${getValue('Department')}_${getValue('Semester')}_A`,
-          subjectCode: getValue('Subject Code'),
-          subjectName: getValue('Subject Name'),
-          subjectType: getValue('Subject Type') || 'Theory',
+          id: `${code}_2025_${dept}_${semVal}_A`,
+          subjectCode: code,
+          subjectName: name,
+          subjectType: type,
           credits: 3, // Default value
           hoursPerWeek: 3, // Default value
-          department: getValue('Department') || 'CSE',
-          year: getValue('Year'),
-          sem: getValue('Semester'),
+          department: dept,
+          year: yearVal,
+          sem: semVal,
           div: 'A', // Default division
           batch: '2025', // Default batch
           teacherId: '',

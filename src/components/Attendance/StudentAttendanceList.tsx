@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Download, Calendar, Users, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { userService, attendanceService, subjectService } from '../../firebase/firestore';
-import { Subject } from '../../types';
 import { User, AttendanceLog } from '../../types';
 import { saveAs } from 'file-saver';
 import { getDepartmentCode } from '../../utils/departmentMapping';
-import { formatYear, getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
+import { getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
 const YEARS = ['1st', '2nd', '3rd', '4th'];
 const DIVS = ['A', 'B', 'C', 'D'];
@@ -264,6 +263,76 @@ const StudentAttendanceList: React.FC = () => {
     }
   };
 
+  const handleExportPresentOnly = async () => {
+    if (!selectedSubject || !selectedDate) {
+      alert('Please select a subject and date to export attendance data.');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const header = ['Sr No', 'Name', 'Division', 'Roll No', 'Subject', 'Selected Date'];
+      const rows: any[] = [];
+      let srNo = 1;
+
+      for (const data of studentAttendanceData) {
+        if (data.presentCount > 0) {
+          rows.push([
+            srNo++,
+            data.student.name,
+            selectedDiv,
+            data.student.rollNumber,
+            selectedSubject,
+            selectedDate
+          ]);
+        }
+      }
+
+      const csv = [header, ...rows].map(row => row.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      saveAs(blob, `present_only_${selectedYear}_${selectedSem}_${selectedDiv}_${selectedSubject}_${selectedDate}.csv`);
+    } catch (error) {
+      alert('Failed to export present-only data.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportAbsentOnly = async () => {
+    if (!selectedSubject || !selectedDate) {
+      alert('Please select a subject and date to export attendance data.');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const header = ['Sr No', 'Name', 'Division', 'Roll No', 'Subject', 'Selected Date'];
+      const rows: any[] = [];
+      let srNo = 1;
+
+      for (const data of studentAttendanceData) {
+        if (data.absentCount > 0) {
+          rows.push([
+            srNo++,
+            data.student.name,
+            selectedDiv,
+            data.student.rollNumber,
+            selectedSubject,
+            selectedDate
+          ]);
+        }
+      }
+
+      const csv = [header, ...rows].map(row => row.join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      saveAs(blob, `absent_only_${selectedYear}_${selectedSem}_${selectedDiv}_${selectedSubject}_${selectedDate}.csv`);
+    } catch (error) {
+      alert('Failed to export absent-only data.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleExportMonthReport = async () => {
     if (!selectedSubject) {
       alert('Please select a subject to export month report.');
@@ -375,15 +444,6 @@ const StudentAttendanceList: React.FC = () => {
     } finally {
       setExporting(false);
     }
-  };
-
-  const handleExportCustomRange = async () => {
-    if (!selectedSubject) {
-      alert('Please select a subject to export custom range report.');
-      return;
-    }
-    
-    setShowCustomRangeInputs(true);
   };
 
   const handleCustomRangeConfirm = async () => {
@@ -600,6 +660,26 @@ const StudentAttendanceList: React.FC = () => {
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Daily'}</span>
               <span className="sm:hidden">{exporting ? '...' : 'Daily'}</span>
+            </button>
+
+            <button 
+              onClick={handleExportPresentOnly}
+              disabled={exporting || !selectedSubject || !selectedDate}
+              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-3 sm:px-4 py-2.5 sm:py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[150px] touch-manipulation active:scale-95 transition-transform"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Present Only'}</span>
+              <span className="sm:hidden">{exporting ? '...' : 'Present'}</span>
+            </button>
+
+            <button 
+              onClick={handleExportAbsentOnly}
+              disabled={exporting || !selectedSubject || !selectedDate}
+              className="flex-1 sm:flex-none flex items-center justify-center space-x-2 px-3 sm:px-4 py-2.5 sm:py-2 bg-rose-600 text-white rounded-md hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[150px] touch-manipulation active:scale-95 transition-transform"
+            >
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">{exporting ? 'Exporting...' : 'Export Absent Only'}</span>
+              <span className="sm:hidden">{exporting ? '...' : 'Absent'}</span>
             </button>
             
             <button 
