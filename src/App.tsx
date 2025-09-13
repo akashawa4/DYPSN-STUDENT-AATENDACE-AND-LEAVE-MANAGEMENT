@@ -21,6 +21,7 @@ import MyResults from './components/Results/MyResults';
 import { Upload, BarChart3, Users, Calendar, FileText } from 'lucide-react';
 import StudentProfile from './components/StudentProfile';
 import TakeAttendancePanel from './components/Attendance/TakeAttendancePanel';
+import BatchManagementPanel from './components/BatchManagement/BatchManagementPanel';
 
 const ProfilePage: React.FC<{ user: any }> = ({ user }) => (
   <div className="max-w-md mx-auto bg-white rounded-xl shadow-md p-6 border border-gray-200 mt-8">
@@ -426,6 +427,8 @@ const AppContent: React.FC = () => {
         return <SubjectManagementPanel />;
       case 'take-attendance':
         return <TakeAttendancePanel addNotification={addNotification} />;
+      case 'batch-management':
+        return <BatchManagementPanel />;
       case 'settings':
         return (
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">

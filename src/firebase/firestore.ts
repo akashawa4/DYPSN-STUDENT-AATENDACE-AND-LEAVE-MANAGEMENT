@@ -102,6 +102,19 @@ export const buildBatchPath = {
   // /results/batch/{batch}/{department}/year/{studentYear}/sems/{sem}/divs/{div}/subjects/{subject}/{examType}
   result: (batch: string, department: string, studentYear: string, sem: string, div: string, subject: string, examType: string) => {
     return `${COLLECTIONS.RESULTS}/batch/${batch}/${department}/year/${studentYear}/sems/${sem}/divs/${div}/subjects/${subject}/${examType}`;
+  },
+
+  // Build batch attendance path: /batchattendance/batch/{batchYear}/CSE/year/{year}/sems/{sem}/divs/{division}/batch/{batchName}/subjects/{subjectName}/{date}
+  batchAttendance: (batch: string, department: string, year: string, sem: string, div: string, batchName: string, subject: string, date: Date) => {
+    const attendanceYear = date.getFullYear().toString();
+    const attendanceMonth = (date.getMonth() + 1).toString().padStart(2, '0');
+    const attendanceDate = date.getDate().toString().padStart(2, '0');
+    return `batchattendance/batch/${batch}/${department}/year/${year}/sems/${sem}/divs/${div}/batch/${batchName}/subjects/${subject}/${attendanceYear}/${attendanceMonth}/${attendanceDate}`;
+  },
+
+  // Build batch path: /batches/{batchId} (simplified structure)
+  batch: (batchId: string) => {
+    return `batches/${batchId}`;
   }
 };
 
@@ -2744,6 +2757,284 @@ export const attendanceService = {
 
     console.log(`🎉 ULTRA-FAST parallel export completed successfully!`);
     return result;
+  }
+};
+
+// Batch Attendance Management
+export const batchAttendanceService = {
+  // Mark batch attendance
+  async markBatchAttendance(attendanceData: Omit<AttendanceLog, 'id'> & { 
+    rollNumber?: string, 
+    userName?: string,
+    batchName?: string,
+    fromRollNo?: string,
+    toRollNo?: string,
+    isBatchAttendance?: boolean
+  }): Promise<string> {
+    const { year, sem, div, subject, rollNumber, userId, userName, date, batchName, fromRollNo, toRollNo } = attendanceData;
+    
+    if (!year || !sem || !div || !subject || !batchName) {
+      throw new Error('Missing required fields for batch attendance: year, sem, div, subject, or batchName');
+    }
+
+    // Ensure date is a string in YYYY-MM-DD format
+    let dateString = '';
+    if (typeof date === 'string') {
+      if ((date as string).length > 10) {
+        dateString = (date as string).split('T')[0];
+      } else {
+        dateString = date as string;
+      }
+    } else if (date instanceof Date) {
+      dateString = date.toISOString().split('T')[0];
+    } else if (date && typeof date === 'object' && typeof (date as any).toDate === 'function') {
+      dateString = (date as any).toDate().toISOString().split('T')[0];
+    }
+
+    const docId = `${rollNumber || userId}_${dateString}`;
+    const dateObj = new Date(dateString);
+    
+    const batch = getBatchYear(year);
+    const department = (attendanceData as any).department || DEPARTMENTS.CSE;
+    const studentYear = (attendanceData as any).studentYear || year;
+    
+    // Build batch attendance collection path
+    const collectionPath = buildBatchPath.batchAttendance(batch, department, studentYear, sem, div, batchName, subject, dateObj);
+    const attendanceRef = doc(collection(db, collectionPath), docId);
+    
+    await setDoc(attendanceRef, {
+      ...attendanceData,
+      batchYear: batch,
+      department: department,
+      rollNumber: rollNumber || userId,
+      userName: userName || '',
+      subject: subject || null,
+      batchName: batchName,
+      fromRollNo: fromRollNo || '',
+      toRollNo: toRollNo || '',
+      isBatchAttendance: true,
+      id: docId,
+      createdAt: serverTimestamp(),
+      date: dateString
+    });
+    
+    return docId;
+  },
+
+  // Get batch attendance by date and batch
+  async getBatchAttendanceByDate(
+    year: string, 
+    sem: string, 
+    div: string, 
+    batchName: string, 
+    subject: string, 
+    date: string
+  ): Promise<AttendanceLog[]> {
+    const dateObj = new Date(date);
+    const batch = getBatchYear(year);
+    const department = DEPARTMENTS.CSE;
+    const studentYear = year;
+    
+    const collectionPath = buildBatchPath.batchAttendance(batch, department, studentYear, sem, div, batchName, subject, dateObj);
+    const attendanceRef = collection(db, collectionPath);
+    const snapshot = await getDocs(attendanceRef);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as AttendanceLog));
+  },
+
+  // Get all batch attendance for a subject and date
+  async getAllBatchAttendanceForSubjectAndDate(
+    year: string, 
+    sem: string, 
+    div: string, 
+    subject: string, 
+    date: string
+  ): Promise<{ [batchName: string]: AttendanceLog[] }> {
+    const batchNames = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2', 'C3', 'C4'];
+    const result: { [batchName: string]: AttendanceLog[] } = {};
+    
+    await Promise.all(
+      batchNames.map(async (batchName) => {
+        try {
+          const attendance = await this.getBatchAttendanceByDate(year, sem, div, batchName, subject, date);
+          if (attendance.length > 0) {
+            result[batchName] = attendance;
+          }
+        } catch (error) {
+          // Batch might not exist, continue with other batches
+          console.log(`No attendance found for batch ${batchName}`);
+        }
+      })
+    );
+    
+    return result;
+  }
+};
+
+// Batch Management Service
+export const batchService = {
+  // Create a new batch
+  async createBatch(batchData: {
+    batchName: string;
+    fromRollNo: string;
+    toRollNo: string;
+    year: string;
+    sem: string;
+    div: string;
+    department: string;
+  }): Promise<string> {
+    const { batchName, fromRollNo, toRollNo, year, sem, div, department } = batchData;
+    
+    if (!batchName || !fromRollNo || !toRollNo || !year || !sem || !div || !department) {
+      throw new Error('Missing required fields for batch creation');
+    }
+
+    const batch = getBatchYear(year);
+    const batchRef = doc(collection(db, 'batches'));
+    
+    const batchDoc = {
+      id: batchRef.id,
+      batchName,
+      fromRollNo,
+      toRollNo,
+      year,
+      sem,
+      div,
+      department,
+      batchYear: batch,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    
+    await setDoc(batchRef, batchDoc);
+    return batchRef.id;
+  },
+
+  // Get batches by filters
+  async getBatchesByFilters(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string
+  ): Promise<any[]> {
+    const batchesRef = collection(db, 'batches');
+    const q = query(
+      batchesRef,
+      where('batchYear', '==', batch),
+      where('department', '==', department),
+      where('year', '==', year),
+      where('sem', '==', sem),
+      where('div', '==', div)
+    );
+    
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  },
+
+  // Get a specific batch
+  async getBatch(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string,
+    batchName: string
+  ): Promise<any | null> {
+    const batchesRef = collection(db, 'batches');
+    const q = query(
+      batchesRef,
+      where('batchYear', '==', batch),
+      where('department', '==', department),
+      where('year', '==', year),
+      where('sem', '==', sem),
+      where('div', '==', div),
+      where('batchName', '==', batchName)
+    );
+    
+    const snapshot = await getDocs(q);
+    if (!snapshot.empty) {
+      const doc = snapshot.docs[0];
+      return {
+        id: doc.id,
+        ...doc.data()
+      };
+    }
+    return null;
+  },
+
+  // Update a batch
+  async updateBatch(batchId: string, batchData: {
+    batchName: string;
+    fromRollNo: string;
+    toRollNo: string;
+    year: string;
+    sem: string;
+    div: string;
+    department: string;
+  }): Promise<void> {
+    const { fromRollNo, toRollNo } = batchData;
+    
+    const batchRef = doc(db, 'batches', batchId);
+    
+    await updateDoc(batchRef, {
+      fromRollNo,
+      toRollNo,
+      updatedAt: serverTimestamp()
+    });
+  },
+
+  // Delete a batch
+  async deleteBatch(batchId: string): Promise<void> {
+    const batchRef = doc(db, 'batches', batchId);
+    await deleteDoc(batchRef);
+  },
+
+  // Get all batches for a division (for dropdown)
+  async getBatchesForDivision(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string
+  ): Promise<{ batchName: string; fromRollNo: string; toRollNo: string }[]> {
+    const batches = await this.getBatchesByFilters(batch, department, year, sem, div);
+    return batches.map(b => ({
+      batchName: b.batchName,
+      fromRollNo: b.fromRollNo,
+      toRollNo: b.toRollNo
+    }));
+  },
+
+  // Get roll numbers for a specific batch
+  async getRollNumbersForBatch(
+    batch: string,
+    department: string,
+    year: string,
+    sem: string,
+    div: string,
+    batchName: string
+  ): Promise<number[]> {
+    const batchData = await this.getBatch(batch, department, year, sem, div, batchName);
+    if (!batchData) {
+      return [];
+    }
+    
+    const fromRoll = parseInt(batchData.fromRollNo);
+    const toRoll = parseInt(batchData.toRollNo);
+    const rollNumbers: number[] = [];
+    
+    for (let i = fromRoll; i <= toRoll; i++) {
+      rollNumbers.push(i);
+    }
+    
+    return rollNumbers;
   }
 };
 

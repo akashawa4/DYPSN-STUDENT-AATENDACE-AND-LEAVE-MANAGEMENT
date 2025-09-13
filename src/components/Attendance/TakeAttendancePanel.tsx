@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { userService, attendanceService, subjectService } from '../../firebase/firestore';
+import { userService, attendanceService, subjectService, batchAttendanceService, batchService } from '../../firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
 import { getDepartmentCode } from '../../utils/departmentMapping';
-import { formatYear, getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
+import { getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
 const YEARS = ['1st', '2nd', '3rd', '4th'];
 const DIVS = ['A', 'B', 'C'];
@@ -32,6 +32,12 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [absent, setAbsent] = useState<User[]>([]);
   const [students, setStudents] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
+  
+  // Batch attendance states
+  const [isBatchAttendance, setIsBatchAttendance] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState('');
+  const [availableBatches, setAvailableBatches] = useState<{ batchName: string; fromRollNo: string; toRollNo: string }[]>([]);
+  const [batchesLoading, setBatchesLoading] = useState(false);
 
   const todayDate = new Date();
   const todayStr = todayDate.toISOString().split('T')[0];
@@ -103,6 +109,39 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     };
     loadSubjects();
   }, [user?.department, year, sem, div]);
+
+  // Load available batches when filters change
+  useEffect(() => {
+    const loadBatches = async () => {
+      if (!isBatchAttendance) return;
+      
+      try {
+        setBatchesLoading(true);
+        const batch = '2025'; // Default batch year
+        const department = getDepartmentCode(user?.department || 'CSE');
+        
+        const batches = await batchService.getBatchesForDivision(
+          batch,
+          department,
+          year,
+          sem,
+          div
+        );
+        
+        setAvailableBatches(batches);
+        if (batches.length > 0 && !selectedBatch) {
+          setSelectedBatch(batches[0].batchName);
+        }
+      } catch (error) {
+        console.error('Error loading batches:', error);
+        setAvailableBatches([]);
+      } finally {
+        setBatchesLoading(false);
+      }
+    };
+
+    loadBatches();
+  }, [isBatchAttendance, year, sem, div, user?.department]);
 
   const handleMarkAllPresent = () => {
     setPresentRolls(students.map(s => s.rollNumber || s.id).join(','));
@@ -191,7 +230,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           status = isPresent ? 'present' : 'absent';
         }
 
-        return attendanceService.markAttendance({
+        const attendanceData = {
           userId: s.id,
           userName: s.name,
           rollNumber: s.rollNumber,
@@ -204,17 +243,36 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           sem: s.sem || sem, // Use student's sem if available, fallback to filter sem
           div: s.div || div, // Use student's div if available, fallback to filter div
           studentYear: s.year || year, // Pass student year for batch path
-        });
+        };
+
+        // If batch attendance is enabled, add batch information
+        if (isBatchAttendance && selectedBatch) {
+          const batch = availableBatches.find(b => b.batchName === selectedBatch);
+          if (batch) {
+            (attendanceData as any).batchName = selectedBatch;
+            (attendanceData as any).fromRollNo = batch.fromRollNo;
+            (attendanceData as any).toRollNo = batch.toRollNo;
+            (attendanceData as any).isBatchAttendance = true;
+          }
+        }
+
+        // Use batch attendance service if batch attendance is enabled
+        if (isBatchAttendance && selectedBatch) {
+          return batchAttendanceService.markBatchAttendance(attendanceData);
+        } else {
+          return attendanceService.markAttendance(attendanceData);
+        }
       })
     );
 
     // Trigger notifications for present and absent students
     if (addNotification) {
+      const batchInfo = isBatchAttendance && selectedBatch ? ` in batch ${selectedBatch}` : '';
       presentStudents.forEach(s => {
-        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked present for ${subject}`);
+        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked present for ${subject}${batchInfo}`);
       });
       absentStudents.forEach(s => {
-        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked absent for ${subject}`);
+        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked absent for ${subject}${batchInfo}`);
       });
     }
   };
@@ -323,6 +381,81 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
               availableSubjects.map((sub, idx) => <option key={`${sub}-${idx}`} value={sub}>{sub}</option>)
             )}
           </select>
+        </div>
+
+        {/* Batch Attendance Options */}
+        <div className="md:col-span-2">
+          <div className="flex items-center gap-2 mb-3">
+            <input
+              type="checkbox"
+              id="batchAttendance"
+              checked={isBatchAttendance}
+              onChange={e => setIsBatchAttendance(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label htmlFor="batchAttendance" className="text-sm font-medium text-gray-700">
+              Batch Attendance (Optional)
+            </label>
+          </div>
+          
+          {isBatchAttendance && (
+            <div className="p-4 bg-gray-50 rounded-lg border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Batch</label>
+                  <select 
+                    value={selectedBatch} 
+                    onChange={e => setSelectedBatch(e.target.value)} 
+                    className="w-full border rounded p-2 text-sm"
+                    disabled={batchesLoading}
+                  >
+                    {batchesLoading ? (
+                      <option value="">Loading batches...</option>
+                    ) : availableBatches.length === 0 ? (
+                      <option value="">No batches available</option>
+                    ) : (
+                      <>
+                        <option value="">Select a batch</option>
+                        {availableBatches.map(batch => (
+                          <option key={batch.batchName} value={batch.batchName}>
+                            {batch.batchName} ({batch.fromRollNo} - {batch.toRollNo})
+                          </option>
+                        ))}
+                      </>
+                    )}
+                  </select>
+                </div>
+                {selectedBatch && availableBatches.length > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Batch Details</label>
+                    <div className="bg-white border rounded p-2 text-sm">
+                      {(() => {
+                        const batch = availableBatches.find(b => b.batchName === selectedBatch);
+                        if (batch) {
+                          const fromRoll = parseInt(batch.fromRollNo);
+                          const toRoll = parseInt(batch.toRollNo);
+                          const totalStudents = toRoll - fromRoll + 1;
+                          return (
+                            <div>
+                              <p><strong>Roll Numbers:</strong> {batch.fromRollNo} - {batch.toRollNo}</p>
+                              <p><strong>Total Students:</strong> {totalStudents}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {availableBatches.length === 0 && !batchesLoading && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                  <p><strong>No batches found</strong> for {year} Year, Semester {sem}, Division {div}.</p>
+                  <p className="mt-1">Please create batches first using the Batch Management panel.</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Present Students Input */}

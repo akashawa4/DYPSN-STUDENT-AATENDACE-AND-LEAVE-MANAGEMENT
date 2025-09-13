@@ -543,7 +543,7 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
       return;
     }
 
-    setUploading(true);
+      setUploading(true);
     try {
       const data = await readExcelFile(selectedFile);
       await importStudents(data);
@@ -821,48 +821,59 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Student Management</h2>
-          <p className="text-gray-600">View and manage students in your department</p>
-          <p className="text-sm text-blue-600 mt-1">
-            Role: {user.role.toUpperCase()} | Department: {user.department} | Year: {selectedYear} | Sem: {selectedSem} | Div: {selectedDiv}
-          </p>
+    <div className="bg-white rounded-lg shadow-sm p-2 sm:p-6">
+      {/* Header - Ultra Mobile Optimized */}
+      <div className="mb-3 sm:mb-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex-1">
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900">Student Management</h2>
+            <p className="text-xs sm:text-base text-gray-600 mt-1">View and manage students</p>
+            <div className="mt-2 text-xs text-blue-600">
+              <div className="flex flex-wrap gap-1">
+                <span className="bg-blue-100 px-1.5 py-0.5 rounded text-xs">{user.role.toUpperCase()}</span>
+                <span className="bg-blue-100 px-1.5 py-0.5 rounded text-xs">{selectedYear}</span>
+                <span className="bg-blue-100 px-1.5 py-0.5 rounded text-xs">Sem {selectedSem}</span>
+                <span className="bg-blue-100 px-1.5 py-0.5 rounded text-xs">Div {selectedDiv}</span>
         </div>
-        <div className="flex gap-2">
+            </div>
+          </div>
+          
+          {/* Action Buttons - Ultra Mobile Optimized */}
+          <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              className="flex items-center justify-center gap-1 bg-blue-600 text-white px-2 py-2 rounded-md hover:bg-blue-700 text-xs"
           >
-            <Upload size={16} />
-            Import Excel
+              <Upload size={14} />
+              <span>Import</span>
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+              className="flex items-center justify-center gap-1 bg-green-600 text-white px-2 py-2 rounded-md hover:bg-green-700 text-xs"
           >
-            <Plus size={16} />
-            Add Student
+              <Plus size={14} />
+              <span>Add</span>
           </button>
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700"
+              className="flex items-center justify-center gap-1 bg-purple-600 text-white px-2 py-2 rounded-md hover:bg-purple-700 text-xs"
           >
-            <Download size={16} />
-            Export Data
+              <Download size={14} />
+              <span>Export</span>
           </button>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      {/* Filters - Ultra Mobile Optimized */}
+      <div className="mb-3 sm:mb-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Year</label>
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2"
+              className="w-full border border-gray-300 rounded-md p-1.5 text-xs sm:text-base"
           >
             {YEARS.map(year => (
               <option key={year} value={year}>{year}</option>
@@ -870,11 +881,11 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Semester</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Sem</label>
           <select
             value={selectedSem}
             onChange={(e) => setSelectedSem(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2"
+              className="w-full border border-gray-300 rounded-md p-1.5 text-xs sm:text-base"
           >
             {SEMS.map(sem => (
               <option key={sem} value={sem}>{sem}</option>
@@ -882,124 +893,130 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Division</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Div</label>
           <select
             value={selectedDiv}
             onChange={(e) => setSelectedDiv(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg p-2"
+              className="w-full border border-gray-300 rounded-md p-1.5 text-xs sm:text-base"
           >
             {DIVS.map(div => (
               <option key={div} value={div}>{div}</option>
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
+          <div className="col-span-2 sm:col-span-1">
+            <label className="block text-xs font-medium text-gray-700 mb-1">Search</label>
           <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Search size={12} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search students..."
+                placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg p-2 pl-10"
+                className="w-full border border-gray-300 rounded-md p-1.5 pl-7 text-xs sm:text-base"
             />
-          </div>
-        </div>
-      </div>
-
-      {/* Summary Stats (shown before student list) */}
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-blue-50 rounded-lg p-4">
-          <div className="flex items-center">
-            <Users className="w-8 h-8 text-blue-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-blue-900">Total Students</p>
-              <p className="text-2xl font-bold text-blue-600">{filteredStudents.length}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-amber-50 rounded-lg p-4">
-          <div className="flex items-center">
-            <Users className="w-8 h-8 text-amber-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-amber-900">Male Students</p>
-              <p className="text-2xl font-bold text-amber-600">{maleCount}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-purple-50 rounded-lg p-4">
-          <div className="flex items-center">
-            <Users className="w-8 h-8 text-purple-600" />
-            <div className="ml-3">
-              <p className="text-sm font-medium text-purple-900">Female Students</p>
-              <p className="text-2xl font-bold text-purple-600">{femaleCount}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Students List - Mobile (cards) */}
-      <div className="md:hidden space-y-3">
+      {/* Summary Stats - Ultra Mobile Optimized */}
+      <div className="mb-3 sm:mb-6">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 sm:gap-4">
+          <div className="bg-blue-50 rounded-md p-2 sm:p-4">
+            <div className="text-center">
+              <Users className="w-4 h-4 sm:w-8 sm:h-8 text-blue-600 mx-auto mb-1" />
+              <p className="text-xs font-medium text-blue-900">Total</p>
+              <p className="text-sm sm:text-2xl font-bold text-blue-600">{filteredStudents.length}</p>
+            </div>
+          </div>
+          <div className="bg-amber-50 rounded-md p-2 sm:p-4">
+            <div className="text-center">
+              <Users className="w-4 h-4 sm:w-8 sm:h-8 text-amber-600 mx-auto mb-1" />
+              <p className="text-xs font-medium text-amber-900">Male</p>
+              <p className="text-sm sm:text-2xl font-bold text-amber-600">{maleCount}</p>
+        </div>
+            </div>
+          <div className="bg-purple-50 rounded-md p-2 sm:p-4">
+            <div className="text-center">
+              <Users className="w-4 h-4 sm:w-8 sm:h-8 text-purple-600 mx-auto mb-1" />
+              <p className="text-xs font-medium text-purple-900">Female</p>
+              <p className="text-sm sm:text-2xl font-bold text-purple-600">{femaleCount}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Students List - Ultra Mobile Optimized */}
+      <div className="md:hidden space-y-2">
         {loading ? (
-          <div className="text-center text-gray-500 py-6">Loading students...</div>
+          <div className="text-center text-gray-500 py-6">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-3"></div>
+            <p className="text-xs">Loading...</p>
+          </div>
         ) : filteredStudents.length === 0 ? (
-          <div className="text-center text-gray-500 py-6">No students found</div>
+          <div className="text-center text-gray-500 py-6">
+            <Users className="w-8 h-8 text-gray-400 mx-auto mb-3" />
+            <p className="text-xs">No students found</p>
+          </div>
         ) : (
           filteredStudents.map((student) => (
-            <div key={student.id} className="bg-white rounded-xl border border-gray-200 p-4 shadow-mobile">
-              <div className="flex items-center">
-                <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-blue-600">
+            <div key={student.id} className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
+              {/* Student Header - Compact */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center flex-1 min-w-0">
+                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-semibold text-blue-600">
                     {student.name.split(' ').map(n => n[0]).join('').toUpperCase()}
                   </span>
                 </div>
-                <div className="ml-3 min-w-0">
-                  <div className="font-semibold text-gray-900 truncate">{student.name}</div>
-                  <div className="text-sm text-gray-600 truncate">{student.email}</div>
+                  <div className="ml-2 min-w-0 flex-1">
+                    <div className="font-semibold text-gray-900 truncate text-xs">{student.name}</div>
+                    <div className="text-xs text-gray-600 truncate">{student.email}</div>
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <div className="text-gray-500">Roll No.</div>
-                  <div className="text-gray-900 font-medium">{student.rollNumber}</div>
-                </div>
-                <div>
-                  <div className="text-gray-500">Contact</div>
-                  <div className="text-gray-900 font-medium">{student.phone || '-'}</div>
-                </div>
-              </div>
-
-              <div className="mt-3 flex items-center justify-between">
-                <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                <span className={`inline-flex px-1.5 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${
                   student.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                 }`}>
-                  {student.isActive ? 'Active' : 'Inactive'}
+                  {student.isActive ? 'A' : 'I'}
                 </span>
-                <div className="flex gap-3">
+              </div>
+
+              {/* Student Details - Compact Grid */}
+              <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                <div>
+                  <div className="text-gray-500">Roll: {student.rollNumber || '-'}</div>
+                  <div className="text-gray-500">Contact: {student.phone || '-'}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500">Gender: {student.gender || '-'}</div>
+                  <div className="text-gray-500">Dept: {student.department || '-'}</div>
+                </div>
+              </div>
+
+              {/* Action Buttons - Compact */}
+              <div className="flex gap-1 pt-2 border-t border-gray-100">
                   <button
                     onClick={() => setSelectedStudent(student)}
-                    className="text-blue-600 hover:text-blue-800"
-                    aria-label="View details"
+                  className="flex-1 flex items-center justify-center gap-1 bg-blue-50 text-blue-600 py-1.5 px-2 rounded-md hover:bg-blue-100 transition-colors text-xs font-medium"
                   >
-                    <Eye size={18} />
+                  <Eye size={12} />
+                  <span>View</span>
                   </button>
                   <button
                     onClick={() => handleEditStudent(student)}
-                    className="text-green-600 hover:text-green-800"
-                    aria-label="Edit student"
+                  className="flex-1 flex items-center justify-center gap-1 bg-green-50 text-green-600 py-1.5 px-2 rounded-md hover:bg-green-100 transition-colors text-xs font-medium"
                   >
-                    <Edit size={18} />
+                  <Edit size={12} />
+                  <span>Edit</span>
                   </button>
                   <button
                     onClick={() => handleDeleteStudent(student)}
-                    className="text-red-600 hover:text-red-800"
-                    aria-label="Delete student"
+                  className="flex-1 flex items-center justify-center gap-1 bg-red-50 text-red-600 py-1.5 px-2 rounded-md hover:bg-red-100 transition-colors text-xs font-medium"
                   >
-                    <Trash2 size={18} />
+                  <Trash2 size={12} />
+                  <span>Delete</span>
                   </button>
-                </div>
               </div>
             </div>
           ))
@@ -1228,19 +1245,19 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
 
       {/* Add Student Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold mb-4">Add New Student</h3>
-            <div className="space-y-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+          <div className="bg-white rounded-lg p-3 sm:p-6 w-full max-w-md max-h-[95vh] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold mb-3">Add New Student</h3>
+            <div className="space-y-2 sm:space-y-4">
               <div>
-                <label htmlFor="studentName" className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                <label htmlFor="studentName" className="block text-xs font-medium text-gray-700 mb-1">Name *</label>
                 <input
                   id="studentName"
                   name="name"
                   type="text"
                   value={newStudent.name}
                   onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
-                  className="w-full border border-gray-300 rounded-lg p-2"
+                  className="w-full border border-gray-300 rounded-md p-2 text-xs sm:text-base"
                   placeholder="Full Name"
                   required
                 />
@@ -1347,16 +1364,16 @@ const TeacherStudentPanel: React.FC<TeacherStudentPanelProps> = ({ user }) => {
                   </select>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2 mt-4">
                 <button
                   onClick={() => setShowAddModal(false)}
-                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400"
+                  className="flex-1 bg-gray-300 text-gray-700 px-3 py-2 rounded-md hover:bg-gray-400 text-xs sm:text-base"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={addStudent}
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
+                  className="flex-1 bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 text-xs sm:text-base"
                 >
                   Add Student
                 </button>

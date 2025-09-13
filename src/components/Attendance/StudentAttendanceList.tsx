@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Calendar, Users, TrendingUp } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { userService, attendanceService, subjectService } from '../../firebase/firestore';
+import { userService, attendanceService, subjectService, batchAttendanceService } from '../../firebase/firestore';
 import { User, AttendanceLog } from '../../types';
 import { saveAs } from 'file-saver';
 import { getDepartmentCode } from '../../utils/departmentMapping';
@@ -29,6 +29,7 @@ const StudentAttendanceList: React.FC = () => {
   const [exporting, setExporting] = useState(false);
   const [students, setStudents] = useState<User[]>([]);
   const [studentAttendanceData, setStudentAttendanceData] = useState<StudentAttendanceData[]>([]);
+  const [batchAttendanceData, setBatchAttendanceData] = useState<{ [batchName: string]: AttendanceLog[] }>({});
   const [error, setError] = useState<string>('');
   
   // Filter states
@@ -200,6 +201,21 @@ const StudentAttendanceList: React.FC = () => {
       // Execute all promises in parallel using Promise.all - this is the key to speed
       const results = await Promise.all(allAttendancePromises);
       setStudentAttendanceData(results);
+      
+      // Also load batch attendance data for the selected date and subject
+      try {
+        const batchData = await batchAttendanceService.getAllBatchAttendanceForSubjectAndDate(
+          selectedYear,
+          selectedSem,
+          selectedDiv,
+          selectedSubject,
+          selectedDate
+        );
+        setBatchAttendanceData(batchData);
+      } catch (error) {
+        // Handle batch attendance error silently
+        console.log('No batch attendance data found');
+      }
       
     } catch (error) {
       // Handle error silently
@@ -809,6 +825,39 @@ const StudentAttendanceList: React.FC = () => {
               </div>
               <Calendar className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600" />
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Attendance Summary */}
+      {Object.keys(batchAttendanceData).length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Batch Attendance Summary</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Object.entries(batchAttendanceData).map(([batchName, attendance]) => {
+              const presentCount = attendance.filter(a => a.status === 'present').length;
+              const absentCount = attendance.filter(a => a.status === 'absent').length;
+              const totalCount = attendance.length;
+              const percentage = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0;
+              
+              return (
+                <div key={batchName} className="bg-gray-50 rounded-lg p-3 border">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-900">{batchName}</h4>
+                    <span className="text-sm text-gray-600">{percentage}%</span>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    <div className="flex justify-between">
+                      <span>Present: {presentCount}</span>
+                      <span>Absent: {absentCount}</span>
+                    </div>
+                    <div className="mt-1">
+                      <span>Total: {totalCount}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
