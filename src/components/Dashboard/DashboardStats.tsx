@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, FileText, CheckCircle, AlertCircle, X, Calendar, TrendingUp, User, MapPin, Users } from 'lucide-react';
+import { Clock, FileText, CheckCircle, AlertCircle, X, Calendar, TrendingUp, User, Users } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { leaveService, attendanceService, userService, getBatchYear } from '../../firebase/firestore';
+import { leaveService, userService, getBatchYear } from '../../firebase/firestore';
 import { getDepartmentCode } from '../../utils/departmentMapping';
 import { LeaveRequest } from '../../types';
 
@@ -54,7 +54,7 @@ interface DashboardStatsProps {
   userRole?: string;
 }
 
-const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading, studentData, totalStudents, userRole }) => {
+const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading, studentData }) => {
   const { user } = useAuth();
   const [selectedModal, setSelectedModal] = useState<string | null>(null);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
@@ -65,7 +65,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
   const [selectedDivision, setSelectedDivision] = useState<string>('');
   // Local student aggregates for Teacher/HOD when props are not passed
   const [localStudentData, setLocalStudentData] = useState<Array<{ year: string; sem: string; div: string; count: number; students: any[] }>>([]);
-  const [localTotalStudents, setLocalTotalStudents] = useState<number>(0);
 
 
   // Load user's leave requests for stats
@@ -118,10 +117,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
         }
 
         setLocalStudentData(aggregates);
-        setLocalTotalStudents(total);
       } catch (e) {
         setLocalStudentData([]);
-        setLocalTotalStudents(0);
       }
     };
     loadStudentsForStaff();
@@ -175,7 +172,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     }
 
     const pendingRequests = leaveRequests.filter(req => req.status === 'pending').length;
-    const approvedRequests = leaveRequests.filter(req => req.status === 'approved').length;
     const totalRequests = leaveRequests.length;
 
     // Only show admin stats for users with full access who are NOT HODs
@@ -597,6 +593,94 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
     return typeMap[type as keyof typeof typeMap] || typeMap.neutral;
   };
 
+  // Render division breakdown for a specific year
+  const renderDivisionBreakdown = (year: string) => {
+    const effectiveStudentData = (studentData && studentData.length > 0) ? studentData : localStudentData;
+    
+    // Filter students for the specific year
+    const yearStudents = effectiveStudentData.filter(d => {
+      const studentYear = d.year?.toString().toLowerCase();
+      return studentYear === year.toLowerCase() || 
+             studentYear?.includes(year.toLowerCase()) || 
+             studentYear?.includes(year.toLowerCase() + 'nd') || 
+             studentYear?.includes(year.toLowerCase() + 'rd') || 
+             studentYear?.includes(year.toLowerCase() + 'th');
+    });
+
+    // Group by division
+    const divisionGroups: { [key: string]: { count: number; students: any[] } } = {};
+    yearStudents.forEach(data => {
+      const div = data.div || 'Unknown';
+      if (!divisionGroups[div]) {
+        divisionGroups[div] = { count: 0, students: [] };
+      }
+      divisionGroups[div].count += data.count;
+      divisionGroups[div].students.push(...data.students);
+    });
+
+    const totalStudents = yearStudents.reduce((sum, d) => sum + d.count, 0);
+
+    return (
+      <div className="space-mobile">
+        {/* Summary */}
+        <div className="bg-blue-50 p-4 rounded-xl mb-6">
+          <div className="flex items-center space-x-2 mb-2">
+            <Users className="w-5 h-5 text-blue-600" />
+            <span className="font-medium text-blue-900">{year} Year Summary</span>
+          </div>
+          <p className="text-2xl font-bold text-blue-900">{totalStudents}</p>
+          <p className="text-sm text-blue-700">Total Students</p>
+        </div>
+
+        {/* Division Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {Object.entries(divisionGroups)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([division, data]) => (
+            <div key={division} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-lg transition-shadow">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                    <span className="text-sm font-bold text-green-600">{division}</span>
+                  </div>
+                  <span className="font-medium text-gray-900">Division {division}</span>
+                </div>
+                <span className="text-2xl font-bold text-gray-900">{data.count}</span>
+              </div>
+              <p className="text-sm text-gray-600">Students</p>
+              
+              {/* Show some student names if available */}
+              {data.students.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-2">Sample students:</p>
+                  <div className="space-y-1">
+                    {data.students.slice(0, 3).map((student, index) => (
+                      <div key={index} className="flex items-center space-x-2 text-xs">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-gray-700 truncate">{student.name || 'Unknown'}</span>
+                      </div>
+                    ))}
+                    {data.students.length > 3 && (
+                      <p className="text-xs text-gray-500">... and {data.students.length - 3} more</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* No data message */}
+        {Object.keys(divisionGroups).length === 0 && (
+          <div className="text-center py-8">
+            <Users className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <p className="text-gray-500">No students found for {year} year</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderModalContent = (modalId: string) => {
     switch (modalId) {
       case 'attendance':
@@ -896,7 +980,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
-                     const isClickable = false; // Make all cards non-clickable
+          // Make year cards clickable to show division breakdown
+          const isClickable = stat.id === 'year2' || stat.id === 'year3' || stat.id === 'year4';
           
           return (
             <div 
@@ -913,12 +998,14 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
                   <p className={`text-xs ${getChangeColor(stat.changeType)}`}>
                     {stat.change}
                   </p>
+                  {isClickable && (
+                    <p className="text-xs text-blue-600 mt-1">Tap to view by division</p>
+                  )}
                 </div>
                 <div className={`p-3 rounded-xl ${getColorClasses(stat.color)}`}>
                   <Icon className="w-5 h-5 lg:w-6 lg:h-6" />
                 </div>
               </div>
-                              {/* Removed tap for details text */}
             </div>
           );
         })}
@@ -959,11 +1046,36 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ dashboardData, loading,
 
       {/* Student Navigation Modal */}
       <DetailModal
-        isOpen={selectedModal === 'students' || selectedModal === 'year2' || selectedModal === 'year3' || selectedModal === 'year4'}
+        isOpen={selectedModal === 'students'}
         onClose={() => setSelectedModal(null)}
         title="Student Management"
       >
         {renderStudentNavigation()}
+      </DetailModal>
+
+      {/* Year Division Breakdown Modals */}
+      <DetailModal
+        isOpen={selectedModal === 'year2'}
+        onClose={() => setSelectedModal(null)}
+        title="2nd Year Students by Division"
+      >
+        {renderDivisionBreakdown('2nd')}
+      </DetailModal>
+
+      <DetailModal
+        isOpen={selectedModal === 'year3'}
+        onClose={() => setSelectedModal(null)}
+        title="3rd Year Students by Division"
+      >
+        {renderDivisionBreakdown('3rd')}
+      </DetailModal>
+
+      <DetailModal
+        isOpen={selectedModal === 'year4'}
+        onClose={() => setSelectedModal(null)}
+        title="4th Year Students by Division"
+      >
+        {renderDivisionBreakdown('4th')}
       </DetailModal>
     </>
   );
