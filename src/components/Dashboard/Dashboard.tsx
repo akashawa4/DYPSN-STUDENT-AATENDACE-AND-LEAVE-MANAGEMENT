@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import DashboardStats from './DashboardStats';
 import RecentActivity from './RecentActivity';
 import { useAuth } from '../../contexts/AuthContext';
-import { leaveService, attendanceService, userService } from '../../firebase/firestore';
-import { Calendar, Users, TrendingUp, Clock, Plus, Eye, Bell, FileText, GraduationCap } from 'lucide-react';
+import { leaveService, attendanceService, userService, getBatchYear } from '../../firebase/firestore';
+import { getDepartmentCode } from '../../utils/departmentMapping';
+import { Calendar, Users, Plus, Eye, Bell, GraduationCap } from 'lucide-react';
 
 // Helper function to get greeting based on time of day
 const getGreeting = (): string => {
@@ -21,7 +22,6 @@ const getGreeting = (): string => {
 };
 
 import TakeAttendancePanel from '../Attendance/TakeAttendancePanel';
-import StudentManagementPanel from '../StudentManagement/StudentManagementPanel';
 import TeacherStudentPanel from '../StudentManagement/TeacherStudentPanel';
 import TeacherManagementPanel from '../TeacherManagement/TeacherManagementPanel';
 
@@ -114,10 +114,29 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
         } else if (user.role === 'teacher' || user.role === 'hod') {
           // Load CSE department student data for teachers/HODs only
           try {
-            // Use batch structure to get students
-            const batch = '2025'; // Default batch year
-            const department = 'CSE'; // Default department for teachers/HODs
-            const allStudents = await userService.getStudentsByBatchDeptYearSemDiv(batch, department, '2nd', '3', 'A');
+            // Use batch structure to get students from ALL years/semesters/divisions
+            const batch = getBatchYear(user.year || '4th'); // Use same logic as DashboardStats
+            const department = getDepartmentCode(user.department); // Use user's department
+            const years = ['2nd', '3rd', '4th'];
+            const semsByYear: Record<string, string[]> = { '2nd': ['3','4'], '3rd': ['5','6'], '4th': ['7','8'] };
+            const divs = ['A','B','C','D'];
+            
+            const allStudents: any[] = [];
+            
+            // Load students from all combinations
+            for (const year of years) {
+              const sems = semsByYear[year] || [];
+              for (const sem of sems) {
+                for (const div of divs) {
+                  try {
+                    const students = await userService.getStudentsByBatchDeptYearSemDiv(batch, department, year, sem, div);
+                    allStudents.push(...students);
+                  } catch (error) {
+                    // Ignore missing collections
+                  }
+                }
+              }
+            }
             
             // Filter for CSE students with more flexible matching
             const cseStudents = allStudents.filter(student => {
