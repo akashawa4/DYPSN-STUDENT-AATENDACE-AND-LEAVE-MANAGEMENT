@@ -22,7 +22,11 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [availableSemesters, setAvailableSemesters] = useState<string[]>(getAvailableSemesters('2'));
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(false);
+  const todayDate = new Date();
+  const todayStr = todayDate.toISOString().split('T')[0];
+  
   const [subject, setSubject] = useState<string>('');
+  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [presentRolls, setPresentRolls] = useState('');
   const [absentRolls, setAbsentRolls] = useState('');
   const [attendanceMode, setAttendanceMode] = useState<'present' | 'absent' | 'both'>('both');
@@ -38,9 +42,6 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [selectedBatch, setSelectedBatch] = useState('');
   const [availableBatches, setAvailableBatches] = useState<{ batchName: string; fromRollNo: string; toRollNo: string }[]>([]);
   const [batchesLoading, setBatchesLoading] = useState(false);
-
-  const todayDate = new Date();
-  const todayStr = todayDate.toISOString().split('T')[0];
 
   const normalizeYear = (y: string) => {
     if (!y) return '';
@@ -143,20 +144,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     loadBatches();
   }, [isBatchAttendance, year, sem, div, user?.department]);
 
-  const handleMarkAllPresent = () => {
-    setPresentRolls(students.map(s => s.rollNumber || s.id).join(','));
-    setAbsentRolls('');
-  };
 
-  const handleMarkAllAbsent = () => {
-    setAbsentRolls(students.map(s => s.rollNumber || s.id).join(','));
-    setPresentRolls('');
-  };
-
-  const handleClearAll = () => {
-    setPresentRolls('');
-    setAbsentRolls('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,7 +222,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           userId: s.id,
           userName: s.name,
           rollNumber: s.rollNumber,
-          date: todayStr,
+          date: selectedDate,
           status,
           subject,
           notes: note,
@@ -279,6 +267,18 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
 
   const handleCopy = (list: User[]) => {
     navigator.clipboard.writeText(list.map(s => `${s.name} (${s.rollNumber || s.id})`).join(', '));
+  };
+
+  const handleMarkAllPresent = () => {
+    const allRollNumbers = students.map(s => String(s.rollNumber || s.id));
+    setPresentRolls(allRollNumbers.join(', '));
+    setAbsentRolls('');
+  };
+
+  const handleMarkAllAbsent = () => {
+    const allRollNumbers = students.map(s => String(s.rollNumber || s.id));
+    setAbsentRolls(allRollNumbers.join(', '));
+    setPresentRolls('');
   };
 
   // Helper to get unique students by rollNumber or id
@@ -381,6 +381,50 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
               availableSubjects.map((sub, idx) => <option key={`${sub}-${idx}`} value={sub}>{sub}</option>)
             )}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Date</label>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="mt-1 block w-full border rounded p-2"
+            max={todayStr}
+          />
+        </div>
+
+        {/* Quick Mark All Buttons */}
+        <div className="md:col-span-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Quick Actions</label>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleMarkAllPresent}
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium transition-colors"
+            >
+              Mark All Present
+            </button>
+            <button
+              type="button"
+              onClick={handleMarkAllAbsent}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium transition-colors"
+            >
+              Mark All Absent
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPresentRolls('');
+                setAbsentRolls('');
+              }}
+              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium transition-colors"
+            >
+              Clear All
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Use these buttons to quickly mark all students as present or absent, then modify as needed.
+          </p>
         </div>
 
         {/* Batch Attendance Options */}
@@ -490,30 +534,6 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           </div>
         )}
 
-        {/* Quick Action Buttons */}
-        <div className="md:col-span-2 flex gap-2 flex-wrap">
-          <button 
-            type="button" 
-            onClick={handleMarkAllPresent} 
-            className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm font-medium"
-          >
-            Mark All Present
-          </button>
-          <button 
-            type="button" 
-            onClick={handleMarkAllAbsent} 
-            className="px-3 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm font-medium"
-          >
-            Mark All Absent
-          </button>
-          <button 
-            type="button" 
-            onClick={handleClearAll} 
-            className="px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium"
-          >
-            Clear All
-          </button>
-        </div>
 
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700">Session Note (optional)</label>
@@ -540,7 +560,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
             <div className="text-sm text-green-900">
               {present.length === 0 ? 'None' : (
                 <ol className="list-decimal list-inside space-y-1">
-                  {uniqueStudents(present).map((s, idx) => (
+                  {uniqueStudents(present).map((s) => (
                     <li key={String(s.rollNumber || s.id)}>{s.name} ({s.rollNumber || s.id})</li>
                   ))}
                 </ol>
@@ -555,7 +575,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
             <div className="text-sm text-red-900">
               {absent.length === 0 ? 'None' : (
                 <ol className="list-decimal list-inside space-y-1">
-                  {uniqueStudents(absent).map((s, idx) => (
+                  {uniqueStudents(absent).map((s) => (
                     <li key={String(s.rollNumber || s.id)}>{s.name} ({s.rollNumber || s.id})</li>
                   ))}
                 </ol>

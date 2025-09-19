@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, TrendingUp, MapPin, Download, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, TrendingUp, Download, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { userService, attendanceService } from '../../firebase/firestore';
 import { AttendanceRecord } from '../../types';
@@ -130,6 +130,10 @@ const MyAttendance: React.FC = () => {
   const [exportSem, setExportSem] = useState('3');
   const [exportDiv, setExportDiv] = useState('A');
   const [exportSubject, setExportSubject] = useState<string>('');
+  
+  // Calendar modal state
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [selectedDateForModal, setSelectedDateForModal] = useState<Date | null>(null);
 
   // Download helpers
   const downloadCSV = (records: AttendanceRecord[], filename: string) => {
@@ -699,9 +703,13 @@ const MyAttendance: React.FC = () => {
                   {calendarDays.map((day, index) => (
                     <div
                       key={index}
-                      className={`p-1 min-h-[60px] border border-gray-100 rounded-lg transition-colors duration-200
-                        ${!day.isCurrentMonth ? 'bg-gray-50' : day.attendance ? getStatusColor(day.attendance.status).split(' ')[0] : 'bg-white'}
+                      className={`p-1 min-h-[60px] border border-gray-100 rounded-lg transition-colors duration-200 cursor-pointer hover:shadow-md
+                        ${!day.isCurrentMonth ? 'bg-gray-50' : day.attendance ? getStatusColor(day.attendance.status).split(' ')[0] : 'bg-white hover:bg-gray-50'}
                         ${day.isToday ? 'ring-2 ring-blue-500' : ''}`}
+                      onClick={() => {
+                        setSelectedDateForModal(day.date);
+                        setShowCalendarModal(true);
+                      }}
                     >
                       <div className={`text-sm font-medium mb-1 ${!day.isCurrentMonth ? 'text-gray-400' : 'text-gray-900'}`}>
                         {day.date.getDate()}
@@ -812,6 +820,145 @@ const MyAttendance: React.FC = () => {
         {/* Removed the sidebar with today's status */}
       </div>
         </>
+      )}
+
+      {/* Calendar Modal */}
+      {showCalendarModal && selectedDateForModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Calendar View - {selectedDateForModal.toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </h3>
+              <button
+                onClick={() => setShowCalendarModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="grid grid-cols-7 gap-1 mb-4">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="p-2 text-center text-sm font-medium text-gray-500 bg-gray-50 rounded">
+                    {day}
+                  </div>
+                ))}
+                
+                {calendarDays.map((day, index) => (
+                  <div
+                    key={index}
+                    className={`p-2 min-h-[80px] border border-gray-200 rounded-lg transition-all duration-200 cursor-pointer hover:shadow-md
+                      ${!day.isCurrentMonth ? 'bg-gray-50 opacity-50' : day.attendance ? getStatusColor(day.attendance.status).split(' ')[0] : 'bg-white hover:bg-gray-50'}
+                      ${day.isToday ? 'ring-2 ring-blue-500' : ''}
+                      ${selectedDateForModal && day.date.toDateString() === selectedDateForModal.toDateString() ? 'ring-2 ring-purple-500' : ''}`}
+                    onClick={() => setSelectedDateForModal(day.date)}
+                  >
+                    <div className={`text-sm font-medium mb-1 ${!day.isCurrentMonth ? 'text-gray-400' : 'text-gray-900'}`}>
+                      {day.date.getDate()}
+                    </div>
+                    {day.attendance && day.isCurrentMonth && (
+                      <div className="space-y-1">
+                        <div className={`text-xs px-1 py-0.5 rounded-full text-center ${getStatusColor(day.attendance.status)}`}> 
+                          {day.attendance.status.charAt(0).toUpperCase() + day.attendance.status.slice(1)}
+                        </div>
+                        {day.attendance.subject && (
+                          <div className="text-xs text-blue-700 text-center font-semibold truncate">{day.attendance.subject}</div>
+                        )}
+                        {day.attendance.notes && (
+                          <div className="text-xs text-gray-600 text-center truncate" title={day.attendance.notes}>
+                            {day.attendance.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Selected Date Details */}
+              {selectedDateForModal && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-3">
+                    Details for {selectedDateForModal.toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </h4>
+                  {(() => {
+                    const dateStr = selectedDateForModal.toISOString().split('T')[0];
+                    const dayAttendance = attendanceData.filter(record => record.date === dateStr);
+                    
+                    if (dayAttendance.length === 0) {
+                      return (
+                        <div className="text-center py-4 text-gray-500">
+                          <Calendar className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                          <p>No attendance records for this date</p>
+                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="space-y-3">
+                        {dayAttendance.map((record, idx) => (
+                          <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(record.status)}`}>
+                                {record.status.charAt(0).toUpperCase() + record.status.slice(1)}
+                              </span>
+                              <span className="text-sm text-gray-600">
+                                {record.createdAt ? new Date(record.createdAt).toLocaleTimeString() : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span className="font-medium text-gray-700">Subject:</span>
+                                <span className="ml-2 text-gray-900">{record.subject || 'N/A'}</span>
+                              </div>
+                              {record.notes && (
+                                <div className="md:col-span-2">
+                                  <span className="font-medium text-gray-700">Notes:</span>
+                                  <span className="ml-2 text-gray-900">{record.notes}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+              
+              {/* Legend */}
+              <div className="flex items-center justify-center space-x-4 mt-4 text-xs">
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-green-100 rounded"></div>
+                  <span className="text-gray-600">Present</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-amber-100 rounded"></div>
+                  <span className="text-gray-600">Late</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-blue-100 rounded"></div>
+                  <span className="text-gray-600">Leave</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <div className="w-3 h-3 bg-red-100 rounded"></div>
+                  <span className="text-gray-600">Absent</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

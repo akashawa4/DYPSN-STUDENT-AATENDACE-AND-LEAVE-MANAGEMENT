@@ -1,14 +1,208 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Filter, Search, Download, Eye, MoreHorizontal } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, AlertTriangle, Search, Download, Eye, MoreHorizontal, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { leaveService } from '../../firebase/firestore';
 import { userService } from '../../firebase/firestore';
-import { LeaveRequest, User } from '../../types';
+import { LeaveRequest } from '../../types';
 import { saveAs } from 'file-saver';
 import { getAvailableSemesters, isValidSemesterForYear, getDefaultSemesterForYear } from '../../utils/semesterMapping';
 
 const YEARS = ['1st', '2nd', '3rd', '4th'];
 const DIVS = ['A', 'B', 'C'];
+
+interface ReapplyLeaveModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  originalLeave: LeaveRequest;
+  onSubmit: (data: any) => void;
+}
+
+const ReapplyLeaveModal: React.FC<ReapplyLeaveModalProps> = ({ isOpen, onClose, originalLeave, onSubmit }) => {
+  const [formData, setFormData] = useState({
+    leaveType: originalLeave.leaveType,
+    fromDate: originalLeave.fromDate,
+    toDate: originalLeave.toDate,
+    reason: originalLeave.reason,
+    reapplyReason: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const leaveTypes = [
+    { id: 'SL', name: 'Sick Leave', balance: 5 },
+    { id: 'CL', name: 'Casual Leave', balance: 3 },
+    { id: 'OD', name: 'On Duty', balance: 2 },
+    { id: 'ML', name: 'Medical Leave', balance: 2 },
+    { id: 'OTH', name: 'Other', balance: 0 }
+  ];
+
+  const calculateDays = () => {
+    if (formData.fromDate && formData.toDate) {
+      const from = new Date(formData.fromDate);
+      const to = new Date(formData.toDate);
+      const diffTime = Math.abs(to.getTime() - from.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      return diffDays;
+    }
+    return 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.leaveType || !formData.fromDate || !formData.toDate || !formData.reason) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const daysRequested = calculateDays();
+      const submitData = {
+        ...formData,
+        daysCount: daysRequested
+      };
+      await onSubmit(submitData);
+    } catch (error) {
+      console.error('Error submitting reapply:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl">
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 sticky top-0 bg-white">
+          <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Reapply Leave Request</h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg touch-manipulation"
+          >
+            <XCircle className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+        
+        <div className="p-4 sm:p-6">
+          {/* Original Request Info */}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <h4 className="font-medium text-amber-900 mb-2">Original Request (Rejected/Returned)</h4>
+            <div className="text-sm text-amber-800">
+              <p><strong>Request ID:</strong> {originalLeave.id}</p>
+              <p><strong>Original Reason:</strong> {originalLeave.reason}</p>
+              <p><strong>Status:</strong> {originalLeave.status}</p>
+              {originalLeave.remarks && (
+                <p><strong>Rejection Remarks:</strong> {originalLeave.remarks}</p>
+              )}
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Leave Type */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Leave Type *</label>
+              <select
+                value={formData.leaveType}
+                onChange={(e) => setFormData({...formData, leaveType: e.target.value as any})}
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                required
+              >
+                <option value="">Select Leave Type</option>
+                {leaveTypes.map(type => (
+                  <option key={type.id} value={type.id}>{type.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Date Range */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">From Date *</label>
+                <input
+                  type="date"
+                  value={formData.fromDate}
+                  onChange={(e) => setFormData({...formData, fromDate: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">To Date *</label>
+                <input
+                  type="date"
+                  value={formData.toDate}
+                  onChange={(e) => setFormData({...formData, toDate: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Days Count Display */}
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Total Days:</strong> {calculateDays()} day{calculateDays() > 1 ? 's' : ''}
+              </p>
+            </div>
+
+            {/* Reason */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Reason *</label>
+              <textarea
+                value={formData.reason}
+                onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                rows={3}
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Please provide a detailed reason for your leave request"
+                required
+              />
+            </div>
+
+            {/* Reapply Reason */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Why are you reapplying? (Optional)</label>
+              <textarea
+                value={formData.reapplyReason}
+                onChange={(e) => setFormData({...formData, reapplyReason: e.target.value})}
+                rows={2}
+                className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Explain any changes or additional information for this reapplication"
+              />
+            </div>
+
+            {/* Submit Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 px-4 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Submitting...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Reapply Leave</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const MyLeaves: React.FC = () => {
   const { user } = useAuth();
@@ -19,6 +213,8 @@ const MyLeaves: React.FC = () => {
   const [leaveRecords, setLeaveRecords] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showReapplyModal, setShowReapplyModal] = useState(false);
+  const [leaveToReapply, setLeaveToReapply] = useState<LeaveRequest | null>(null);
   // Add year/sem/div state for teacher/HOD
   const [year, setYear] = useState('1st');
   const [sem, setSem] = useState('1');
@@ -144,6 +340,50 @@ const MyLeaves: React.FC = () => {
     approved: leaveRecords.filter(l => l.status === 'approved').length,
     pending: leaveRecords.filter(l => l.status === 'pending').length,
     rejected: leaveRecords.filter(l => l.status === 'rejected').length + leaveRecords.filter(l => l.status === 'returned').length
+  };
+
+  const handleReapply = (leave: LeaveRequest) => {
+    setLeaveToReapply(leave);
+    setShowReapplyModal(true);
+  };
+
+  const handleReapplySubmit = async (updatedLeaveData: any) => {
+    if (!leaveToReapply || !user) return;
+
+    try {
+      // Create a new leave request with updated data
+      const reapplyData = {
+        ...updatedLeaveData,
+        userId: user.id,
+        userName: user.name,
+        department: user.department,
+        submittedAt: new Date().toISOString(),
+        currentApprovalLevel: 'Teacher',
+        approvalFlow: ['Teacher', 'HOD'],
+        status: 'pending',
+        isReapply: true,
+        originalRequestId: leaveToReapply.id,
+        reapplyReason: updatedLeaveData.reapplyReason || 'Resubmitted after rejection'
+      };
+
+      // Enrich with student academic info if available
+      if ((user as any).year) reapplyData.year = (user as any).year;
+      if ((user as any).sem) reapplyData.sem = (user as any).sem;
+      if ((user as any).div) reapplyData.div = (user as any).div;
+
+      await leaveService.createLeaveRequest(reapplyData);
+      
+      // Close modal and refresh data
+      setShowReapplyModal(false);
+      setLeaveToReapply(null);
+      
+      // Refresh the leave records
+      const requests = await leaveService.getLeaveRequestsByUser(user.id);
+      setLeaveRecords(requests);
+      
+    } catch (error) {
+      console.error('Error reapplying leave request:', error);
+    }
   };
 
   // Export leave data as CSV for the logged-in student
@@ -454,6 +694,22 @@ const MyLeaves: React.FC = () => {
                   <span>Approved by: {leave.approvedBy}</span>
                 )}
               </div>
+              
+              {/* Reapply button for rejected/returned leaves - only for students */}
+              {user?.role === 'student' && (leave.status === 'rejected' || leave.status === 'returned') && (
+                <div className="pt-3 border-t border-gray-100">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleReapply(leave);
+                    }}
+                    className="w-full flex items-center justify-center space-x-2 px-3 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Reapply</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -532,6 +788,16 @@ const MyLeaves: React.FC = () => {
                       >
                         <Eye className="w-4 h-4 text-gray-600" />
                       </button>
+                      {/* Reapply button for rejected/returned leaves - only for students */}
+                      {user?.role === 'student' && (leave.status === 'rejected' || leave.status === 'returned') && (
+                        <button
+                          onClick={() => handleReapply(leave)}
+                          className="p-1 hover:bg-blue-100 rounded text-blue-600"
+                          title="Reapply Leave"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      )}
                       <button className="p-1 hover:bg-gray-100 rounded" title="More Options">
                         <MoreHorizontal className="w-4 h-4 text-gray-600" />
                       </button>
@@ -631,6 +897,19 @@ const MyLeaves: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Reapply Modal */}
+      {showReapplyModal && leaveToReapply && (
+        <ReapplyLeaveModal
+          isOpen={showReapplyModal}
+          onClose={() => {
+            setShowReapplyModal(false);
+            setLeaveToReapply(null);
+          }}
+          originalLeave={leaveToReapply}
+          onSubmit={handleReapplySubmit}
+        />
       )}
     </div>
   );

@@ -354,26 +354,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onPageChange }) => {
 
       {/* Recent Activity for Students */}
       {user?.role === 'student' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <RecentActivity />
-          <div className="bg-white rounded-2xl shadow-mobile border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Summary</h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <span className="text-gray-600">Attendance Status</span>
-                <span className="text-green-600 font-semibold">Present</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <span className="text-gray-600">Leave Balance</span>
-                <span className="text-blue-600 font-semibold">{dashboardData.leaveBalance.total} days</span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <span className="text-gray-600">Pending Requests</span>
-                <span className="text-amber-600 font-semibold">{dashboardData.pendingRequests}</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        <RecentActivity />
       )}
     </div>
   );
