@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { userService, attendanceService, subjectService, batchAttendanceService, batchService } from '../../firebase/firestore';
+import { userService, attendanceService, subjectService, batchService, getBatchYear } from '../../firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
 import { getDepartmentCode } from '../../utils/departmentMapping';
@@ -30,6 +30,9 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [presentRolls, setPresentRolls] = useState('');
   const [absentRolls, setAbsentRolls] = useState('');
   const [attendanceMode, setAttendanceMode] = useState<'present' | 'absent' | 'both'>('both');
+  const [attendanceType, setAttendanceType] = useState<'class' | 'batch'>('class');
+  const [inputMethod, setInputMethod] = useState<'tap' | 'type'>('tap');
+  const [studentAttendance, setStudentAttendance] = useState<{[key: string]: 'present' | 'absent' | 'unmarked'}>({});
   const [note, setNote] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [present, setPresent] = useState<User[]>([]);
@@ -37,11 +40,11 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [students, setStudents] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // Batch attendance states
-  const [isBatchAttendance, setIsBatchAttendance] = useState(false);
-  const [selectedBatch, setSelectedBatch] = useState('');
-  const [availableBatches, setAvailableBatches] = useState<{ batchName: string; fromRollNo: string; toRollNo: string }[]>([]);
-  const [batchesLoading, setBatchesLoading] = useState(false);
+  
+  // Batch data for batch-wise attendance
+  const [batchData, setBatchData] = useState<{ batchName: string; fromRollNo: string; toRollNo: string; totalStudents: number }[]>([]);
+  const [selectedBatchForAttendance, setSelectedBatchForAttendance] = useState('');
+  const [batchAttendanceLoading, setBatchAttendanceLoading] = useState(false);
 
   const normalizeYear = (y: string) => {
     if (!y) return '';
@@ -83,6 +86,86 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     fetchStudents();
   }, [year, sem, div]);
 
+  // Load batch data for batch-wise attendance
+  useEffect(() => {
+    const fetchBatchData = async () => {
+      if (attendanceType !== 'batch') return;
+      
+      setBatchAttendanceLoading(true);
+      try {
+        const dept = getDepartmentCode(user?.department);
+        const batch = getBatchYear(user?.year || '4th');
+        
+        // Convert year format to match batch structure
+        const normalizedYear = year.replace(/(st|nd|rd|th)/i, '');
+        
+        console.log('User department:', user?.department);
+        console.log('Department code:', dept);
+        console.log('User year:', user?.year);
+        console.log('Batch year:', batch);
+        console.log('Fetching batches with params:', { dept, batch, year: normalizedYear, sem, div });
+        
+        // Try to fetch batches using the same approach as the existing system
+        let batches = await batchService.getBatchesForDivision(batch, dept, year, sem, div);
+        
+        console.log('Fetched batches:', batches);
+        
+        // If no batches found, create some demo batches for this division
+        if (batches.length === 0) {
+          console.log('No batches found, creating demo batches...');
+          const demoBatches = [
+            {
+              batchName: `Batch A (${div})`,
+              fromRollNo: '101',
+              toRollNo: '120',
+              year: year,
+              sem: sem,
+              div: div,
+              department: dept
+            },
+            {
+              batchName: `Batch B (${div})`,
+              fromRollNo: '121',
+              toRollNo: '140',
+              year: year,
+              sem: sem,
+              div: div,
+              department: dept
+            }
+          ];
+          
+          // Create demo batches
+          for (const demoBatch of demoBatches) {
+            try {
+              await batchService.createBatch(demoBatch);
+              console.log('Created demo batch:', demoBatch.batchName);
+            } catch (error) {
+              console.error('Error creating demo batch:', error);
+            }
+          }
+          
+          // Fetch batches again after creating demo ones
+          batches = await batchService.getBatchesForDivision(batch, dept, year, sem, div);
+          console.log('Fetched batches after creating demo:', batches);
+        }
+        
+        const batchDataWithCount = batches.map((batch: any) => ({
+          ...batch,
+          totalStudents: parseInt(batch.toRollNo) - parseInt(batch.fromRollNo) + 1
+        }));
+        
+        setBatchData(batchDataWithCount);
+      } catch (error) {
+        console.error('Error fetching batch data:', error);
+        setBatchData([]);
+      } finally {
+        setBatchAttendanceLoading(false);
+      }
+    };
+    
+    fetchBatchData();
+  }, [attendanceType, year, sem, div, user?.department, user?.year]);
+
   // Load subjects dynamically based on filters (ignore div for subjects)
   useEffect(() => {
     const loadSubjects = async () => {
@@ -111,38 +194,6 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     loadSubjects();
   }, [user?.department, year, sem, div]);
 
-  // Load available batches when filters change
-  useEffect(() => {
-    const loadBatches = async () => {
-      if (!isBatchAttendance) return;
-      
-      try {
-        setBatchesLoading(true);
-        const batch = '2025'; // Default batch year
-        const department = getDepartmentCode(user?.department || 'CSE');
-        
-        const batches = await batchService.getBatchesForDivision(
-          batch,
-          department,
-          year,
-          sem,
-          div
-        );
-        
-        setAvailableBatches(batches);
-        if (batches.length > 0 && !selectedBatch) {
-          setSelectedBatch(batches[0].batchName);
-        }
-      } catch (error) {
-        console.error('Error loading batches:', error);
-        setAvailableBatches([]);
-      } finally {
-        setBatchesLoading(false);
-      }
-    };
-
-    loadBatches();
-  }, [isBatchAttendance, year, sem, div, user?.department]);
 
 
 
@@ -152,38 +203,77 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     let presentList: string[] = [];
     let absentList: string[] = [];
 
-    if (attendanceMode === 'present') {
-      // Only present students mode
-      presentList = presentRolls
-        .split(/[\s,]+/)
-        .map(r => r.trim())
-        .filter(r => r.length > 0);
-      // All other students are marked absent
-      const presentSet = new Set(presentList);
-      absentList = students
-        .filter(s => !presentSet.has(String(s.rollNumber || s.id)))
-        .map(s => String(s.rollNumber || s.id));
-    } else if (attendanceMode === 'absent') {
-      // Only absent students mode
-      absentList = absentRolls
-        .split(/[\s,]+/)
-        .map(r => r.trim())
-        .filter(r => r.length > 0);
-      // All other students are marked present
-      const absentSet = new Set(absentList);
-      presentList = students
-        .filter(s => !absentSet.has(String(s.rollNumber || s.id)))
-        .map(s => String(s.rollNumber || s.id));
+    // Handle batch-wise attendance
+    if (attendanceType === 'batch' && selectedBatchForAttendance) {
+      const batch = batchData.find(b => b.batchName === selectedBatchForAttendance);
+      if (batch) {
+        const fromRoll = parseInt(batch.fromRollNo);
+        const toRoll = parseInt(batch.toRollNo);
+        
+        // For batch attendance, we'll mark all students in the batch as present by default
+        // and let the teacher specify absent students in the text input
+        for (let roll = fromRoll; roll <= toRoll; roll++) {
+          presentList.push(roll.toString());
+        }
+        
+        // Remove any absent students specified in the absent rolls input
+        const absentRollsList = absentRolls
+          .split(/[\s,]+/)
+          .map(r => r.trim())
+          .filter(r => r.length > 0);
+        
+        presentList = presentList.filter(roll => !absentRollsList.includes(roll));
+        absentList = absentRollsList;
+      }
     } else {
-      // Both mode - use both inputs
-      presentList = presentRolls
-        .split(/[\s,]+/)
-        .map(r => r.trim())
-        .filter(r => r.length > 0);
-      absentList = absentRolls
-        .split(/[\s,]+/)
-        .map(r => r.trim())
-        .filter(r => r.length > 0);
+      // Use card-based attendance data if available, otherwise fall back to text input
+      const hasCardData = Object.keys(studentAttendance).length > 0;
+      
+      if (hasCardData) {
+        // Use card-based attendance data
+        Object.entries(studentAttendance).forEach(([studentId, status]) => {
+          if (status === 'present') {
+            presentList.push(studentId);
+          } else if (status === 'absent') {
+            absentList.push(studentId);
+          }
+        });
+      } else {
+        // Use traditional text input method
+      if (attendanceMode === 'present') {
+        // Only present students mode
+        presentList = presentRolls
+          .split(/[\s,]+/)
+          .map(r => r.trim())
+          .filter(r => r.length > 0);
+        // All other students are marked absent
+        const presentSet = new Set(presentList);
+        absentList = students
+          .filter(s => !presentSet.has(String(s.rollNumber || s.id)))
+          .map(s => String(s.rollNumber || s.id));
+      } else if (attendanceMode === 'absent') {
+        // Only absent students mode
+        absentList = absentRolls
+          .split(/[\s,]+/)
+          .map(r => r.trim())
+          .filter(r => r.length > 0);
+        // All other students are marked present
+        const absentSet = new Set(absentList);
+        presentList = students
+          .filter(s => !absentSet.has(String(s.rollNumber || s.id)))
+          .map(s => String(s.rollNumber || s.id));
+      } else {
+        // Both mode - use both inputs
+        presentList = presentRolls
+          .split(/[\s,]+/)
+          .map(r => r.trim())
+          .filter(r => r.length > 0);
+        absentList = absentRolls
+          .split(/[\s,]+/)
+          .map(r => r.trim())
+          .filter(r => r.length > 0);
+      }
+      }
     }
 
     // Ensure present and absent lists are mutually exclusive and unique
@@ -233,34 +323,18 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           studentYear: s.year || year, // Pass student year for batch path
         };
 
-        // If batch attendance is enabled, add batch information
-        if (isBatchAttendance && selectedBatch) {
-          const batch = availableBatches.find(b => b.batchName === selectedBatch);
-          if (batch) {
-            (attendanceData as any).batchName = selectedBatch;
-            (attendanceData as any).fromRollNo = batch.fromRollNo;
-            (attendanceData as any).toRollNo = batch.toRollNo;
-            (attendanceData as any).isBatchAttendance = true;
-          }
-        }
-
-        // Use batch attendance service if batch attendance is enabled
-        if (isBatchAttendance && selectedBatch) {
-          return batchAttendanceService.markBatchAttendance(attendanceData);
-        } else {
-          return attendanceService.markAttendance(attendanceData);
-        }
+        // Use regular attendance service
+        return attendanceService.markAttendance(attendanceData);
       })
     );
 
     // Trigger notifications for present and absent students
     if (addNotification) {
-      const batchInfo = isBatchAttendance && selectedBatch ? ` in batch ${selectedBatch}` : '';
       presentStudents.forEach(s => {
-        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked present for ${subject}${batchInfo}`);
+        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked present for ${subject}`);
       });
       absentStudents.forEach(s => {
-        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked absent for ${subject}${batchInfo}`);
+        addNotification(`${s.name} (${s.rollNumber || s.id}) was marked absent for ${subject}`);
       });
     }
   };
@@ -273,13 +347,46 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     const allRollNumbers = students.map(s => String(s.rollNumber || s.id));
     setPresentRolls(allRollNumbers.join(', '));
     setAbsentRolls('');
+    
+    // Also update card-based system
+    const newAttendance: {[key: string]: 'present' | 'absent' | 'unmarked'} = {};
+    students.forEach(s => {
+      newAttendance[String(s.rollNumber || s.id)] = 'present';
+    });
+    setStudentAttendance(newAttendance);
   };
 
   const handleMarkAllAbsent = () => {
     const allRollNumbers = students.map(s => String(s.rollNumber || s.id));
     setAbsentRolls(allRollNumbers.join(', '));
     setPresentRolls('');
+    
+    // Also update card-based system
+    const newAttendance: {[key: string]: 'present' | 'absent' | 'unmarked'} = {};
+    students.forEach(s => {
+      newAttendance[String(s.rollNumber || s.id)] = 'absent';
+    });
+    setStudentAttendance(newAttendance);
   };
+
+  // Handle individual student card tap
+  const handleStudentCardTap = (studentId: string, currentStatus: 'present' | 'absent' | 'unmarked') => {
+    let newStatus: 'present' | 'absent' | 'unmarked' = 'unmarked';
+    
+    if (currentStatus === 'unmarked') {
+      newStatus = 'present';
+    } else if (currentStatus === 'present') {
+      newStatus = 'absent';
+    } else if (currentStatus === 'absent') {
+      newStatus = 'unmarked';
+    }
+    
+    setStudentAttendance(prev => ({
+      ...prev,
+      [studentId]: newStatus
+    }));
+  };
+
 
   // Helper to get unique students by rollNumber or id
   function uniqueStudents(list: User[]) {
@@ -295,6 +402,72 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   return (
     <div className="bg-white p-4 rounded-lg border border-blue-200 shadow mb-6">
       <h2 className="text-lg font-bold text-blue-900 mb-2">Take Attendance</h2>
+      
+      {/* Attendance Type Selector */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Attendance Type</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setAttendanceType('class')}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              attendanceType === 'class'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Class-wise (Individual Students)
+          </button>
+          <button
+            type="button"
+            onClick={() => setAttendanceType('batch')}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              attendanceType === 'batch'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Batch-wise (Group Attendance)
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          {attendanceType === 'class' && 'Mark attendance for individual students using student cards'}
+          {attendanceType === 'batch' && 'Mark attendance for entire batches at once'}
+        </p>
+      </div>
+      
+      {/* Input Method Selector */}
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-2">Input Method</label>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setInputMethod('tap')}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              inputMethod === 'tap'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Tap Box (Student Cards)
+          </button>
+          <button
+            type="button"
+            onClick={() => setInputMethod('type')}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              inputMethod === 'type'
+                ? 'bg-green-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            Type Roll No (Text Input)
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          {inputMethod === 'tap' && 'Tap on individual student cards to mark attendance - more visual and user-friendly'}
+          {inputMethod === 'type' && 'Type roll numbers manually in text fields - traditional method'}
+        </p>
+      </div>
       
       {/* Attendance Mode Selector */}
       <div className="mb-4">
@@ -393,6 +566,89 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           />
         </div>
 
+        {/* Batch Selection for Batch-wise Attendance */}
+        {attendanceType === 'batch' && (
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Batch</label>
+            {batchAttendanceLoading ? (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-600">Loading batches...</p>
+              </div>
+            ) : batchData.length === 0 ? (
+              <div className="text-center py-4 text-gray-500">
+                <p>No batches found for {year} Year, Semester {sem}, Division {div}.</p>
+                <p className="text-xs mt-1">Please create batches first using the Batch Management panel.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {batchData.map((batch, index) => (
+                  <div
+                    key={index}
+                    onClick={() => setSelectedBatchForAttendance(batch.batchName)}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                      selectedBatchForAttendance === batch.batchName
+                        ? 'bg-blue-100 border-blue-500 text-blue-800'
+                        : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="text-center">
+                      <div className="text-sm font-semibold mb-1">{batch.batchName}</div>
+                      <div className="text-xs text-gray-600 mb-2">
+                        Roll: {batch.fromRollNo} - {batch.toRollNo}
+                      </div>
+                      <div className="text-xs font-medium">
+                        {batch.totalStudents} students
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {selectedBatchForAttendance && (
+              <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">Selected Batch: {selectedBatchForAttendance}</p>
+                    <p className="text-xs text-blue-700">
+                      {(() => {
+                        const batch = batchData.find(b => b.batchName === selectedBatchForAttendance);
+                        return batch ? `Roll Numbers: ${batch.fromRollNo} - ${batch.toRollNo} (${batch.totalStudents} students)` : '';
+                      })()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBatchForAttendance('')}
+                    className="text-blue-600 hover:text-blue-800 text-sm"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Absent Students Input for Batch-wise Attendance */}
+        {attendanceType === 'batch' && selectedBatchForAttendance && (
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Absent Student Roll Numbers (comma or space separated)
+            </label>
+            <textarea
+              value={absentRolls}
+              onChange={e => setAbsentRolls(e.target.value)}
+              className="mt-1 block w-full border rounded p-2 border-red-300 focus:border-red-500 focus:ring-red-500"
+              rows={2}
+              placeholder="e.g. 101, 103, 105 (students who are absent from the selected batch)"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Enter roll numbers of students who are absent. All other students in the batch will be marked present.
+            </p>
+          </div>
+        )}
+
         {/* Quick Mark All Buttons */}
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">Quick Actions</label>
@@ -416,6 +672,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
               onClick={() => {
                 setPresentRolls('');
                 setAbsentRolls('');
+                setStudentAttendance({});
               }}
               className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium transition-colors"
             >
@@ -427,112 +684,105 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           </p>
         </div>
 
-        {/* Batch Attendance Options */}
-        <div className="md:col-span-2">
-          <div className="flex items-center gap-2 mb-3">
-            <input
-              type="checkbox"
-              id="batchAttendance"
-              checked={isBatchAttendance}
-              onChange={e => setIsBatchAttendance(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-            />
-            <label htmlFor="batchAttendance" className="text-sm font-medium text-gray-700">
-              Batch Attendance (Optional)
+        {/* Student Cards - Only for Class-wise Attendance and Tap Method */}
+        {attendanceType === 'class' && inputMethod === 'tap' && (
+          <div className="md:col-span-2">
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Student Attendance Cards - Tap to mark Present/Absent
             </label>
           </div>
           
-          {isBatchAttendance && (
-            <div className="p-4 bg-gray-50 rounded-lg border">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select Batch</label>
-                  <select 
-                    value={selectedBatch} 
-                    onChange={e => setSelectedBatch(e.target.value)} 
-                    className="w-full border rounded p-2 text-sm"
-                    disabled={batchesLoading}
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading students...</p>
+            </div>
+          ) : students.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <p>No students found for the selected criteria.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-4">
+              {students.map((student) => {
+                const studentId = String(student.rollNumber || student.id);
+                const status = studentAttendance[studentId] || 'unmarked';
+                
+                return (
+                  <div
+                    key={studentId}
+                    onClick={() => handleStudentCardTap(studentId, status)}
+                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                      status === 'present' 
+                        ? 'bg-green-100 border-green-500 text-green-800' 
+                        : status === 'absent'
+                        ? 'bg-red-100 border-red-500 text-red-800'
+                        : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                    }`}
                   >
-                    {batchesLoading ? (
-                      <option value="">Loading batches...</option>
-                    ) : availableBatches.length === 0 ? (
-                      <option value="">No batches available</option>
-                    ) : (
-                      <>
-                        <option value="">Select a batch</option>
-                        {availableBatches.map(batch => (
-                          <option key={batch.batchName} value={batch.batchName}>
-                            {batch.batchName} ({batch.fromRollNo} - {batch.toRollNo})
-                          </option>
-                        ))}
-                      </>
-                    )}
-                  </select>
-                </div>
-                {selectedBatch && availableBatches.length > 0 && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Batch Details</label>
-                    <div className="bg-white border rounded p-2 text-sm">
-                      {(() => {
-                        const batch = availableBatches.find(b => b.batchName === selectedBatch);
-                        if (batch) {
-                          const fromRoll = parseInt(batch.fromRollNo);
-                          const toRoll = parseInt(batch.toRollNo);
-                          const totalStudents = toRoll - fromRoll + 1;
-                          return (
-                            <div>
-                              <p><strong>Roll Numbers:</strong> {batch.fromRollNo} - {batch.toRollNo}</p>
-                              <p><strong>Total Students:</strong> {totalStudents}</p>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
+                    <div className="text-center">
+                      <div className="text-lg font-bold mb-1" title={`${student.name} - Roll: ${student.rollNumber || student.id}`}>
+                        {student.rollNumber || student.id}
+                      </div>
+                      <div className="text-xs opacity-75 truncate" title={student.name}>
+                        {student.name}
+                      </div>
+                      <div className="text-xs mt-2 font-medium">
+                        {status === 'present' ? '✓ Present' : 
+                         status === 'absent' ? '✗ Absent' : 
+                         '○ Unmarked'}
+                      </div>
                     </div>
                   </div>
-                )}
-              </div>
-              {availableBatches.length === 0 && !batchesLoading && (
-                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
-                  <p><strong>No batches found</strong> for {year} Year, Semester {sem}, Division {div}.</p>
-                  <p className="mt-1">Please create batches first using the Batch Management panel.</p>
-                </div>
-              )}
+                );
+              })}
             </div>
           )}
-        </div>
-
-        {/* Present Students Input */}
-        {(attendanceMode === 'present' || attendanceMode === 'both') && (
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Present Student Roll Numbers (comma or space separated)
-            </label>
-            <textarea
-              value={presentRolls}
-              onChange={e => setPresentRolls(e.target.value)}
-              className="mt-1 block w-full border rounded p-2 border-green-300 focus:border-green-500 focus:ring-green-500"
-              rows={2}
-              placeholder="e.g. 201, 202, 204"
-            />
+          
+          <div className="mt-3 text-xs text-gray-500">
+            <p>• Tap once: Mark Present • Tap twice: Mark Absent • Tap thrice: Unmark</p>
+            <p>• Green = Present • Red = Absent • Gray = Unmarked</p>
+          </div>
           </div>
         )}
 
-        {/* Absent Students Input */}
-        {(attendanceMode === 'absent' || attendanceMode === 'both') && (
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Absent Student Roll Numbers (comma or space separated)
-            </label>
-            <textarea
-              value={absentRolls}
-              onChange={e => setAbsentRolls(e.target.value)}
-              className="mt-1 block w-full border rounded p-2 border-red-300 focus:border-red-500 focus:ring-red-500"
-              rows={2}
-              placeholder="e.g. 203, 205, 206"
-            />
-          </div>
+        {/* Text Input Fields - Only for Type Method */}
+        {inputMethod === 'type' && (
+          <>
+            {/* Present Students Input */}
+            {(attendanceMode === 'present' || attendanceMode === 'both') && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Present Student Roll Numbers (comma or space separated)
+                </label>
+                <textarea
+                  value={presentRolls}
+                  onChange={e => setPresentRolls(e.target.value)}
+                  className="mt-1 block w-full border rounded p-2 border-green-300 focus:border-green-500 focus:ring-green-500"
+                  rows={2}
+                  placeholder="e.g. 201, 202, 204"
+                />
+              </div>
+            )}
+
+            {/* Absent Students Input */}
+            {(attendanceMode === 'absent' || attendanceMode === 'both') && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Absent Student Roll Numbers (comma or space separated)
+                </label>
+                <textarea
+                  value={absentRolls}
+                  onChange={e => setAbsentRolls(e.target.value)}
+                  className="mt-1 block w-full border rounded p-2 border-red-300 focus:border-red-500 focus:ring-red-500"
+                  rows={2}
+                  placeholder="e.g. 203, 205, 206"
+                />
+              </div>
+            )}
+          </>
         )}
+
 
 
         <div className="md:col-span-2">
