@@ -192,10 +192,10 @@ const StudentMyAttendance: React.FC = () => {
     try {
       // Get student's own attendance for the selected subject and date
       const studentAttendance = await attendanceService.getOrganizedAttendanceByUserAndDateRange(
-        user.rollNumber!,
+        String(user.rollNumber || ''),
         user.year || '2nd',
         user.sem || '3',
-        user.div || 'A',
+        (user.div || 'A').toUpperCase(),
         selectedSubject,
         new Date(selectedDate),
         new Date(selectedDate)
@@ -316,10 +316,10 @@ const StudentMyAttendance: React.FC = () => {
       
       // Get student's month attendance data
       const monthAttendance = await attendanceService.getOrganizedAttendanceByUserAndDateRange(
-        user!.rollNumber!,
+        String(user!.rollNumber || ''),
         user!.year || '2nd',
         user!.sem || '3',
-        user!.div || 'A',
+        (user!.div || 'A').toUpperCase(),
         selectedSubject,
         firstDayOfMonth,
         lastDayOfMonth
@@ -392,10 +392,10 @@ const StudentMyAttendance: React.FC = () => {
       
       // Get student's custom range attendance data
       const rangeAttendance = await attendanceService.getOrganizedAttendanceByUserAndDateRange(
-        user!.rollNumber!,
+        String(user!.rollNumber || ''),
         user!.year || '2nd',
         user!.sem || '3',
-        user!.div || 'A',
+        (user!.div || 'A').toUpperCase(),
         selectedSubject,
         startDate,
         endDate

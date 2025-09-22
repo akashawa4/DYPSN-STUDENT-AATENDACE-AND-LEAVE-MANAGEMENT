@@ -2220,9 +2220,19 @@ export const attendanceService = {
       
       try {
         const recordsRef = collection(db, collectionPath);
-        const q = query(recordsRef, where('rollNumber', '==', rollNumber));
-        const querySnapshot = await getDocs(q);
-        
+        // First try with rollNumber as string
+        let qAny = query(recordsRef, where('rollNumber', '==', rollNumber));
+        let querySnapshot = await getDocs(qAny);
+
+        // If nothing found, try with numeric roll number as Firestore may store numbers
+        if (querySnapshot.empty) {
+          const asNumber = parseInt(rollNumber, 10);
+          if (!Number.isNaN(asNumber)) {
+            qAny = query(recordsRef, where('rollNumber', '==', asNumber as any));
+            querySnapshot = await getDocs(qAny);
+          }
+        }
+
         const records = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
