@@ -238,6 +238,24 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
             absentList.push(studentId);
           }
         });
+
+        // Fill in unmarked students according to selected attendanceMode
+        const presentSetFromCards = new Set(presentList);
+        const absentSetFromCards = new Set(absentList);
+        const unmarked = students
+          .map(s => String(s.rollNumber || s.id))
+          .filter(id => !presentSetFromCards.has(id) && !absentSetFromCards.has(id));
+
+        if (attendanceMode === 'present') {
+          // All unmarked are absent
+          absentList = [...absentList, ...unmarked];
+        } else if (attendanceMode === 'absent') {
+          // All unmarked are present
+          presentList = [...presentList, ...unmarked];
+        } else if (attendanceMode === 'both') {
+          // Treat unmarked as absent by default
+          absentList = [...absentList, ...unmarked];
+        }
       } else {
         // Use traditional text input method
       if (attendanceMode === 'present') {
@@ -703,7 +721,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
               <p>No students found for the selected criteria.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-4">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 border border-gray-200 rounded-lg p-3">
               {students.map((student) => {
                 const studentId = String(student.rollNumber || student.id);
                 const status = studentAttendance[studentId] || 'unmarked';
@@ -712,7 +730,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
                   <div
                     key={studentId}
                     onClick={() => handleStudentCardTap(studentId, status)}
-                    className={`p-3 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
+                    className={`p-2 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
                       status === 'present' 
                         ? 'bg-green-100 border-green-500 text-green-800' 
                         : status === 'absent'
@@ -721,7 +739,7 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
                     }`}
                   >
                     <div className="text-center">
-                      <div className="text-lg font-bold mb-1" title={`${student.name} - Roll: ${student.rollNumber || student.id}`}>
+                      <div className="text-base font-bold mb-1" title={`${student.name} - Roll: ${student.rollNumber || student.id}`}>
                         {student.rollNumber || student.id}
                       </div>
                       <div className="text-xs opacity-75 truncate" title={student.name}>

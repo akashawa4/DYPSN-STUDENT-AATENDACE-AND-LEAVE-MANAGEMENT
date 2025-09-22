@@ -34,11 +34,68 @@ const StudentMyAttendance: React.FC = () => {
   // Dynamic subjects based on student's year and semester
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [subjectsLoading, setSubjectsLoading] = useState(true);
+  
+  // Batch information
+  const [batchInfo, setBatchInfo] = useState<{
+    batchName: string;
+    fromRollNo: string;
+    toRollNo: string;
+    totalStudents: number;
+  } | null>(null);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
     const today = new Date();
     return today.toISOString().split('T')[0];
+  };
+
+  // Load batch information for the student
+  const loadBatchInfo = async () => {
+    if (!user || user.role !== 'student') return;
+    
+    setBatchLoading(true);
+    try {
+      const { batchService, getBatchYear } = await import('../../firebase/firestore');
+      const { getDepartmentCode } = await import('../../utils/departmentMapping');
+      
+      const dept = getDepartmentCode(user.department);
+      const batch = getBatchYear(user.year || '4th');
+      const normalizedYear = (user.year || '2nd').replace(/(st|nd|rd|th)/i, '');
+      
+      // Get batches for the student's division
+      const batches = await batchService.getBatchesForDivision(
+        batch,
+        dept,
+        normalizedYear,
+        user.sem || '3',
+        user.div || 'A'
+      );
+      
+      // Find the batch that contains the student's roll number
+      const studentRollNumber = parseInt(user.rollNumber || '0');
+      const studentBatch = batches.find(batch => {
+        const fromRoll = parseInt(batch.fromRollNo);
+        const toRoll = parseInt(batch.toRollNo);
+        return studentRollNumber >= fromRoll && studentRollNumber <= toRoll;
+      });
+      
+      if (studentBatch) {
+        setBatchInfo({
+          batchName: studentBatch.batchName,
+          fromRollNo: studentBatch.fromRollNo,
+          toRollNo: studentBatch.toRollNo,
+          totalStudents: parseInt(studentBatch.toRollNo) - parseInt(studentBatch.fromRollNo) + 1
+        });
+      } else {
+        setBatchInfo(null);
+      }
+    } catch (error) {
+      console.error('Error loading batch info:', error);
+      setBatchInfo(null);
+    } finally {
+      setBatchLoading(false);
+    }
   };
 
   // Load subjects based on student's year and semester
@@ -95,10 +152,11 @@ const StudentMyAttendance: React.FC = () => {
     setSelectedDate(getTodayDate());
   }, []);
 
-  // Load subjects when user data is available
+  // Load subjects and batch info when user data is available
   useEffect(() => {
     if (user && user.role === 'student') {
       loadSubjects();
+      loadBatchInfo();
     }
   }, [user]);
 
@@ -411,7 +469,27 @@ const StudentMyAttendance: React.FC = () => {
             <span><span className="font-medium">Sem:</span> {user.sem}</span>
             <span><span className="font-medium">Div:</span> {user.div}</span>
             <span><span className="font-medium">Dept:</span> {user.department}</span>
+            <span><span className="font-medium">Roll:</span> {user.rollNumber}</span>
           </div>
+          {batchLoading ? (
+            <div className="mt-2 text-xs text-blue-600 flex items-center">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+              Loading batch information...
+            </div>
+          ) : batchInfo ? (
+            <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+              <div className="text-xs font-medium text-blue-900 mb-1">Batch Information</div>
+              <div className="flex flex-wrap gap-3 text-xs text-blue-700">
+                <span><span className="font-medium">Batch:</span> {batchInfo.batchName}</span>
+                <span><span className="font-medium">Roll Range:</span> {batchInfo.fromRollNo} - {batchInfo.toRollNo}</span>
+                <span><span className="font-medium">Total Students:</span> {batchInfo.totalStudents}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 text-xs text-amber-600 bg-amber-50 p-2 rounded border border-amber-200">
+              <span className="font-medium">No batch assigned</span> - Contact your administrator
+            </div>
+          )}
         </div>
       </div>
 
@@ -643,6 +721,11 @@ const StudentMyAttendance: React.FC = () => {
                     <div>
                       <h3 className="text-sm font-semibold text-gray-900">{user?.name}</h3>
                       <p className="text-xs text-gray-600">Roll No: {user?.rollNumber}</p>
+                      {batchInfo && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          Batch: {batchInfo.batchName} ({batchInfo.fromRollNo}-{batchInfo.toRollNo})
+                        </p>
+                      )}
                     </div>
                     <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                       data.status === 'present' ? 'bg-green-100 text-green-800' :
@@ -702,6 +785,7 @@ const StudentMyAttendance: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sr No</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Roll No</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Batch</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
@@ -717,6 +801,18 @@ const StudentMyAttendance: React.FC = () => {
                       <div className="text-sm font-medium text-gray-900">{user?.name}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user?.rollNumber}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {batchInfo ? (
+                          <div>
+                            <div className="font-medium">{batchInfo.batchName}</div>
+                            <div className="text-xs text-gray-500">{batchInfo.fromRollNo} - {batchInfo.toRollNo}</div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">No batch</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{selectedSubject}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
