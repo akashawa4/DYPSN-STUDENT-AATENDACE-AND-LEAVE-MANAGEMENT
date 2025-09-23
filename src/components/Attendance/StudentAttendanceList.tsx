@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Calendar, Users, TrendingUp } from 'lucide-react';
+import { Download, Calendar, Users, TrendingUp, Edit } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { userService, attendanceService, subjectService, batchAttendanceService, batchService } from '../../firebase/firestore';
 import { User, AttendanceLog } from '../../types';
@@ -31,6 +31,16 @@ const StudentAttendanceList: React.FC = () => {
   const [studentAttendanceData, setStudentAttendanceData] = useState<StudentAttendanceData[]>([]);
   const [batchAttendanceData, setBatchAttendanceData] = useState<{ [batchName: string]: AttendanceLog[] }>({});
   const [error, setError] = useState<string>('');
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<{
+    id: string;
+    name: string;
+    rollNumber: string;
+    currentStatus: 'present' | 'absent' | 'not_marked';
+  } | null>(null);
+  const [editStatus, setEditStatus] = useState<'present' | 'absent'>('present');
   
   // Filter states
   const [selectedYear, setSelectedYear] = useState('2nd');
@@ -585,6 +595,51 @@ const StudentAttendanceList: React.FC = () => {
     }
   };
 
+  // Open edit modal for a student row
+  const handleOpenEdit = (data: StudentAttendanceData) => {
+    const currentStatus: 'present' | 'absent' | 'not_marked' =
+      data.presentCount > 0 ? 'present' : data.absentCount > 0 ? 'absent' : 'not_marked';
+    setEditingStudent({
+      id: data.student.id,
+      name: data.student.name,
+      rollNumber: data.student.rollNumber || '',
+      currentStatus
+    });
+    setEditStatus(currentStatus === 'absent' ? 'absent' : 'present');
+    setShowEditModal(true);
+  };
+
+  // Save edit (update attendance status)
+  const handleSaveEdit = async () => {
+    if (!editingStudent) return;
+    try {
+      setEditSubmitting(true);
+      setError('');
+      const ok = await attendanceService.updateAttendanceStatus(
+        editingStudent.rollNumber,
+        selectedYear,
+        selectedSem,
+        selectedDiv,
+        selectedSubject,
+        selectedDate,
+        editStatus
+      );
+      if (!ok) {
+        setError('Failed to update attendance.');
+      }
+      // Reload data
+      if (students.length > 0) {
+        await loadAttendanceData(students);
+      }
+      setShowEditModal(false);
+      setEditingStudent(null);
+    } catch (e) {
+      setError('Failed to update attendance.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const handleCustomRangeConfirm = async () => {
     if (!customRangeFrom || !customRangeTo) {
       alert('Please enter both start and end dates.');
@@ -1089,6 +1144,16 @@ const StudentAttendanceList: React.FC = () => {
                       {data.attendancePercentage}%
                     </span>
                   </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      onClick={() => handleOpenEdit(data)}
+                      className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 active:scale-95 transition"
+                      title="Edit attendance"
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      Edit
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1108,6 +1173,7 @@ const StudentAttendanceList: React.FC = () => {
                     <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Present</th>
                     <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Absent</th>
                     <th className="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance %</th>
+                    <th className="px-3 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -1148,12 +1214,78 @@ const StudentAttendanceList: React.FC = () => {
                           {data.attendancePercentage}%
                         </span>
                       </td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-right">
+                        <button
+                          onClick={() => handleOpenEdit(data)}
+                          className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md border border-blue-600 text-blue-600 hover:bg-blue-50 active:scale-95 transition"
+                          title="Edit attendance"
+                        >
+                          <Edit className="w-4 h-4 mr-1" />
+                          Edit
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
+          {/* Edit Modal */}
+          {showEditModal && editingStudent && (
+            <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg w-full max-w-md">
+                <div className="px-5 py-4 border-b">
+                  <h3 className="text-lg font-semibold text-gray-900">Edit Attendance</h3>
+                </div>
+                <div className="px-5 py-4 space-y-4">
+                  <div className="text-sm text-gray-700">
+                    <div className="font-medium">{editingStudent.name}</div>
+                    <div className="text-gray-500">Roll No: {editingStudent.rollNumber}</div>
+                    <div className="text-gray-500">Subject: {selectedSubject}</div>
+                    <div className="text-gray-500">Date: {selectedDate}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <div className="flex items-center space-x-4">
+                      <label className="inline-flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          name="attendance-status"
+                          checked={editStatus === 'present'}
+                          onChange={() => setEditStatus('present')}
+                        />
+                        <span className="text-sm">Present</span>
+                      </label>
+                      <label className="inline-flex items-center space-x-2">
+                        <input
+                          type="radio"
+                          name="attendance-status"
+                          checked={editStatus === 'absent'}
+                          onChange={() => setEditStatus('absent')}
+                        />
+                        <span className="text-sm">Absent</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-5 py-4 border-t flex justify-end space-x-2">
+                  <button
+                    onClick={() => { setShowEditModal(false); setEditingStudent(null); }}
+                    className="px-4 py-2 text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveEdit}
+                    disabled={editSubmitting}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {editSubmitting ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 

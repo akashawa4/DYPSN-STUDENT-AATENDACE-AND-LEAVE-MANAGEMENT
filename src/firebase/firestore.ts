@@ -1979,9 +1979,9 @@ export const leaveService = {
   }
 };
 
-// Attendance Management
+// Attendance Management - Complete CRUD Operations
 export const attendanceService = {
-  // Mark attendance
+  // CREATE - Mark attendance for a student
   async markAttendance(attendanceData: Omit<AttendanceLog, 'id'> & { rollNumber?: string, userName?: string }): Promise<string> {
     // Extract year, sem, div, subject, rollNumber, date from attendanceData
     const { year, sem, div, subject, rollNumber, userId, userName, date } = attendanceData;
@@ -2026,6 +2026,711 @@ export const attendanceService = {
       date: dateString
     });
     return docId;
+  },
+
+  // CREATE - Mark attendance for multiple students (bulk operation)
+  async markBulkAttendance(attendanceRecords: Array<Omit<AttendanceLog, 'id'> & { rollNumber?: string, userName?: string }>): Promise<string[]> {
+    const batch = writeBatch(db);
+    const docIds: string[] = [];
+    
+    for (const attendanceData of attendanceRecords) {
+      const { year, sem, div, subject, rollNumber, userId, userName, date } = attendanceData;
+      if (!year || !sem || !div || !subject) {
+        throw new Error('Missing year, sem, div, or subject for organized attendance path');
+      }
+      
+      // Ensure date is a string in YYYY-MM-DD format
+      let dateString = '';
+      if (typeof date === 'string') {
+        if ((date as string).length > 10) {
+          dateString = (date as string).split('T')[0];
+        } else {
+          dateString = date as string;
+        }
+      } else if (date instanceof Date) {
+        dateString = date.toISOString().split('T')[0];
+      } else if (date && typeof date === 'object' && typeof (date as any).toDate === 'function') {
+        dateString = (date as any).toDate().toISOString().split('T')[0];
+      }
+      
+      const docId = `${rollNumber || userId}_${dateString}`;
+      const dateObj = new Date(dateString);
+      const batchYear = getBatchYear(year);
+      const department = (attendanceData as any).department || DEPARTMENTS.CSE;
+      const studentYear = (attendanceData as any).studentYear || year;
+      const collectionPath = buildBatchPath.attendance(batchYear, department, studentYear, sem, div, subject, dateObj);
+      const attendanceRef = doc(collection(db, collectionPath), docId);
+      
+      batch.set(attendanceRef, {
+        ...attendanceData,
+        batchYear: batchYear,
+        department: department,
+        rollNumber: rollNumber || userId,
+        userName: userName || '',
+        subject: subject || null,
+        id: docId,
+        createdAt: serverTimestamp(),
+        date: dateString
+      });
+      
+      docIds.push(docId);
+    }
+    
+    await batch.commit();
+    return docIds;
+  },
+
+  // READ - Get attendance by ID
+  async getAttendanceById(attendanceId: string, year: string, sem: string, div: string, subject: string, date: string): Promise<AttendanceLog | null> {
+    try {
+      const dateObj = new Date(date);
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE; // Default department
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+      const attendanceRef = doc(collection(db, collectionPath), attendanceId);
+      const docSnap = await getDoc(attendanceRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() } as AttendanceLog;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting attendance by ID:', error);
+      return null;
+    }
+  },
+
+  // READ - Get attendance by student and date range
+  async getAttendanceByStudentAndDateRange(
+    rollNumber: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<AttendanceLog[]> {
+    try {
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      
+      // Generate all dates in the range
+      const dates: string[] = [];
+      const currentDate = new Date(startDate);
+      while (currentDate <= endDate) {
+        dates.push(currentDate.toISOString().split('T')[0]);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      const attendanceRecords: AttendanceLog[] = [];
+      
+      // Query each date collection
+      for (const dateStr of dates) {
+        const dateObj = new Date(dateStr);
+        const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+        const docId = `${rollNumber}_${dateStr}`;
+        const attendanceRef = doc(collection(db, collectionPath), docId);
+        const docSnap = await getDoc(attendanceRef);
+        
+        if (docSnap.exists()) {
+          attendanceRecords.push({ id: docSnap.id, ...docSnap.data() } as AttendanceLog);
+        }
+      }
+      
+      return attendanceRecords.sort((a, b) => {
+        const aDate = a.date instanceof Date ? a.date : 
+                     (a.date as any)?.toDate?.() || new Date(a.date || 0);
+        const bDate = b.date instanceof Date ? b.date : 
+                     (b.date as any)?.toDate?.() || new Date(b.date || 0);
+        return bDate.getTime() - aDate.getTime();
+      });
+    } catch (error) {
+      console.error('Error getting attendance by student and date range:', error);
+      return [];
+    }
+  },
+
+  // READ - Get attendance by date and subject
+  async getAttendanceByDateAndSubject(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<AttendanceLog[]> {
+    try {
+      const dateObj = new Date(date);
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+      const attendanceRef = collection(db, collectionPath);
+      const querySnapshot = await getDocs(attendanceRef);
+      
+      return querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as AttendanceLog[];
+    } catch (error) {
+      console.error('Error getting attendance by date and subject:', error);
+      return [];
+    }
+  },
+
+  // READ - Get attendance statistics for a student
+  async getAttendanceStatistics(
+    rollNumber: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    totalDays: number;
+    presentDays: number;
+    absentDays: number;
+    attendancePercentage: number;
+    records: AttendanceLog[];
+  }> {
+    const records = await this.getAttendanceByStudentAndDateRange(
+      rollNumber, year, sem, div, subject, startDate, endDate
+    );
+    
+    const totalDays = records.length;
+    const presentDays = records.filter(r => r.status === 'present').length;
+    const absentDays = records.filter(r => r.status === 'absent').length;
+    const attendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+    
+    return {
+      totalDays,
+      presentDays,
+      absentDays,
+      attendancePercentage,
+      records
+    };
+  },
+
+  // UPDATE - Update attendance record
+  async updateAttendance(
+    attendanceId: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string,
+    updateData: Partial<AttendanceLog>
+  ): Promise<boolean> {
+    try {
+      const dateObj = new Date(date);
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+      const attendanceRef = doc(collection(db, collectionPath), attendanceId);
+      
+      await updateDoc(attendanceRef, {
+        ...updateData,
+        updatedAt: serverTimestamp()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating attendance:', error);
+      return false;
+    }
+  },
+
+  // UPDATE - Update attendance status
+  async updateAttendanceStatus(
+    rollNumber: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string,
+    newStatus: 'present' | 'absent' | 'late' | 'half-day' | 'leave'
+  ): Promise<boolean> {
+    try {
+      const dateObj = new Date(date);
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+      const docId = `${rollNumber}_${date}`;
+      const attendanceRef = doc(collection(db, collectionPath), docId);
+      
+      await updateDoc(attendanceRef, {
+        status: newStatus,
+        updatedAt: serverTimestamp()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating attendance status:', error);
+      return false;
+    }
+  },
+
+  // DELETE - Delete attendance record
+  async deleteAttendance(
+    attendanceId: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<boolean> {
+    try {
+      const dateObj = new Date(date);
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+      const attendanceRef = doc(collection(db, collectionPath), attendanceId);
+      
+      await deleteDoc(attendanceRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting attendance:', error);
+      return false;
+    }
+  },
+
+  // BULK OPERATIONS - Delete multiple attendance records
+  async deleteBulkAttendance(
+    attendanceIds: string[],
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<{ success: number; failed: number; errors: string[] }> {
+    const batch = writeBatch(db);
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+    
+    try {
+      const dateObj = new Date(date);
+      const batchYear = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batchYear, department, studentYear, sem, div, subject, dateObj);
+      
+      for (const attendanceId of attendanceIds) {
+        try {
+          const attendanceRef = doc(collection(db, collectionPath), attendanceId);
+          batch.delete(attendanceRef);
+          successCount++;
+        } catch (error) {
+          failedCount++;
+          errors.push(`Failed to delete ${attendanceId}: ${error}`);
+        }
+      }
+      
+      await batch.commit();
+      return { success: successCount, failed: failedCount, errors };
+    } catch (error) {
+      console.error('Error in bulk delete:', error);
+      return { success: successCount, failed: failedCount, errors: [...errors, `Bulk operation failed: ${error}`] };
+    }
+  },
+
+  // BULK OPERATIONS - Update multiple attendance records
+  async updateBulkAttendance(
+    updates: Array<{
+      attendanceId: string;
+      updateData: Partial<AttendanceLog>;
+    }>,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<{ success: number; failed: number; errors: string[] }> {
+    const batch = writeBatch(db);
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+    
+    try {
+      const dateObj = new Date(date);
+      const batchYear = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batchYear, department, studentYear, sem, div, subject, dateObj);
+      
+      for (const update of updates) {
+        try {
+          const attendanceRef = doc(collection(db, collectionPath), update.attendanceId);
+          batch.update(attendanceRef, {
+            ...update.updateData,
+            updatedAt: serverTimestamp()
+          });
+          successCount++;
+        } catch (error) {
+          failedCount++;
+          errors.push(`Failed to update ${update.attendanceId}: ${error}`);
+        }
+      }
+      
+      await batch.commit();
+      return { success: successCount, failed: failedCount, errors };
+    } catch (error) {
+      console.error('Error in bulk update:', error);
+      return { success: successCount, failed: failedCount, errors: [...errors, `Bulk operation failed: ${error}`] };
+    }
+  },
+
+  // BULK OPERATIONS - Mark attendance for multiple students with different statuses
+  async markBulkAttendanceWithStatus(
+    attendanceRecords: Array<{
+      rollNumber: string;
+      userName: string;
+      status: 'present' | 'absent' | 'late' | 'half-day' | 'leave';
+      notes?: string;
+    }>,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<{ success: number; failed: number; errors: string[] }> {
+    const batch = writeBatch(db);
+    let successCount = 0;
+    let failedCount = 0;
+    const errors: string[] = [];
+    
+    try {
+      const dateObj = new Date(date);
+      const batchYear = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batchYear, department, studentYear, sem, div, subject, dateObj);
+      
+      for (const record of attendanceRecords) {
+        try {
+          const docId = `${record.rollNumber}_${date}`;
+          const attendanceRef = doc(collection(db, collectionPath), docId);
+          
+          batch.set(attendanceRef, {
+            userId: record.rollNumber,
+            userName: record.userName,
+            rollNumber: record.rollNumber,
+            date: date,
+            status: record.status,
+            subject: subject,
+            notes: record.notes || '',
+            year: year,
+            sem: sem,
+            div: div,
+            studentYear: year,
+            batchYear: batchYear,
+            department: department,
+            id: docId,
+            createdAt: serverTimestamp()
+          });
+          
+          successCount++;
+        } catch (error) {
+          failedCount++;
+          errors.push(`Failed to mark attendance for ${record.rollNumber}: ${error}`);
+        }
+      }
+      
+      await batch.commit();
+      return { success: successCount, failed: failedCount, errors };
+    } catch (error) {
+      console.error('Error in bulk attendance marking:', error);
+      return { success: successCount, failed: failedCount, errors: [...errors, `Bulk operation failed: ${error}`] };
+    }
+  },
+
+  // SEARCH - Search attendance records with advanced filters
+  async searchAttendanceRecords(
+    filters: {
+      year?: string;
+      sem?: string;
+      div?: string;
+      subject?: string;
+      rollNumber?: string;
+      userName?: string;
+      status?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      limit?: number;
+    }
+  ): Promise<AttendanceLog[]> {
+    try {
+      const { year, sem, div, subject, rollNumber, userName, status, dateFrom, dateTo, limit = 100 } = filters;
+      
+      if (!year || !sem || !div || !subject) {
+        throw new Error('Year, semester, division, and subject are required for search');
+      }
+      
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      
+      // If date range is provided, search within that range
+      if (dateFrom && dateTo) {
+        const startDate = new Date(dateFrom);
+        const endDate = new Date(dateTo);
+        const dates: string[] = [];
+        const currentDate = new Date(startDate);
+        
+        while (currentDate <= endDate) {
+          dates.push(currentDate.toISOString().split('T')[0]);
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+        
+        const allRecords: AttendanceLog[] = [];
+        
+        for (const dateStr of dates) {
+          const dateObj = new Date(dateStr);
+          const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+          const attendanceRef = collection(db, collectionPath);
+          const querySnapshot = await getDocs(attendanceRef);
+          
+          const records = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as AttendanceLog[];
+          
+          allRecords.push(...records);
+        }
+        
+        // Apply additional filters
+        let filteredRecords = allRecords;
+        
+        if (rollNumber) {
+          filteredRecords = filteredRecords.filter(record => {
+            const rn = String((record as any).rollNumber || '').toLowerCase();
+            const uid = String(record.userId || '').toLowerCase();
+            const q = rollNumber.toLowerCase();
+            return rn.includes(q) || uid.includes(q);
+          });
+        }
+        
+        if (userName) {
+          filteredRecords = filteredRecords.filter(record => 
+            record.userName?.toLowerCase().includes(userName.toLowerCase())
+          );
+        }
+        
+        if (status) {
+          filteredRecords = filteredRecords.filter(record => record.status === status);
+        }
+        
+        return filteredRecords.slice(0, limit);
+      } else {
+        // Search without date range (less efficient)
+        const today = new Date();
+        const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, today);
+        const attendanceRef = collection(db, collectionPath);
+        const querySnapshot = await getDocs(attendanceRef);
+        
+        const records = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as AttendanceLog[];
+        
+        // Apply filters
+        let filteredRecords = records;
+        
+        if (rollNumber) {
+          filteredRecords = filteredRecords.filter(record => {
+            const rn = String((record as any).rollNumber || '').toLowerCase();
+            const uid = String(record.userId || '').toLowerCase();
+            const q = rollNumber.toLowerCase();
+            return rn.includes(q) || uid.includes(q);
+          });
+        }
+        
+        if (userName) {
+          filteredRecords = filteredRecords.filter(record => 
+            record.userName?.toLowerCase().includes(userName.toLowerCase())
+          );
+        }
+        
+        if (status) {
+          filteredRecords = filteredRecords.filter(record => record.status === status);
+        }
+        
+        return filteredRecords.slice(0, limit);
+      }
+    } catch (error) {
+      console.error('Error searching attendance records:', error);
+      return [];
+    }
+  },
+
+  // STATISTICS - Get attendance statistics for a subject and date range (aggregate across students)
+  async getAttendanceStatisticsForSubjectRange(
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    startDate: string,
+    endDate: string
+  ): Promise<{
+    totalRecords: number;
+    presentCount: number;
+    absentCount: number;
+    lateCount: number;
+    halfDayCount: number;
+    leaveCount: number;
+    attendancePercentage: number;
+    students: Array<{
+      rollNumber: string;
+      userName: string;
+      totalDays: number;
+      presentDays: number;
+      absentDays: number;
+      attendancePercentage: number;
+    }>;
+  }> {
+    try {
+      const startDateObj = new Date(startDate);
+      const endDateObj = new Date(endDate);
+      
+      const attendanceRecords = await this.getAttendanceByStudentAndDateRange(
+        '', // Empty rollNumber to get all students
+        year,
+        sem,
+        div,
+        subject,
+        startDateObj,
+        endDateObj
+      );
+      
+      const totalRecords = attendanceRecords.length;
+      const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
+      const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
+      const lateCount = attendanceRecords.filter(r => r.status === 'late').length;
+      const halfDayCount = attendanceRecords.filter(r => r.status === 'half-day').length;
+      const leaveCount = attendanceRecords.filter(r => r.status === 'leave').length;
+      const attendancePercentage = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
+      
+      // Group by student
+      const studentMap = new Map<string, {
+        rollNumber: string;
+        userName: string;
+        records: AttendanceLog[];
+      }>();
+      
+      attendanceRecords.forEach(record => {
+        const key = String((record as any).rollNumber || record.userId || '');
+        if (!studentMap.has(key)) {
+          studentMap.set(key, {
+            rollNumber: String((record as any).rollNumber || record.userId || ''),
+            userName: record.userName || '',
+            records: []
+          });
+        }
+        studentMap.get(key)!.records.push(record);
+      });
+      
+      const students = Array.from(studentMap.values()).map(student => {
+        const totalDays = student.records.length;
+        const presentDays = student.records.filter(r => r.status === 'present').length;
+        const absentDays = student.records.filter(r => r.status === 'absent').length;
+        const studentAttendancePercentage = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
+        
+        return {
+          rollNumber: student.rollNumber,
+          userName: student.userName,
+          totalDays,
+          presentDays,
+          absentDays,
+          attendancePercentage: studentAttendancePercentage
+        };
+      });
+      
+      return {
+        totalRecords,
+        presentCount,
+        absentCount,
+        lateCount,
+        halfDayCount,
+        leaveCount,
+        attendancePercentage,
+        students
+      };
+    } catch (error) {
+      console.error('Error getting attendance statistics:', error);
+      return {
+        totalRecords: 0,
+        presentCount: 0,
+        absentCount: 0,
+        lateCount: 0,
+        halfDayCount: 0,
+        leaveCount: 0,
+        attendancePercentage: 0,
+        students: []
+      };
+    }
+  },
+
+  // DELETE - Delete attendance by student and date
+  async deleteAttendanceByStudentAndDate(
+    rollNumber: string,
+    year: string,
+    sem: string,
+    div: string,
+    subject: string,
+    date: string
+  ): Promise<boolean> {
+    try {
+      const dateObj = new Date(date);
+      const batch = getBatchYear(year);
+      const department = DEPARTMENTS.CSE;
+      const studentYear = year;
+      const collectionPath = buildBatchPath.attendance(batch, department, studentYear, sem, div, subject, dateObj);
+      const docId = `${rollNumber}_${date}`;
+      const attendanceRef = doc(collection(db, collectionPath), docId);
+      
+      await deleteDoc(attendanceRef);
+      return true;
+    } catch (error) {
+      console.error('Error deleting attendance by student and date:', error);
+      return false;
+    }
+  },
+
+  // DELETE - Delete multiple attendance records (detailed input)
+  async deleteBulkAttendanceWithMeta(
+    attendanceIds: Array<{
+      id: string;
+      year: string;
+      sem: string;
+      div: string;
+      subject: string;
+      date: string;
+    }>
+  ): Promise<boolean> {
+    try {
+      const batch = writeBatch(db);
+      
+      for (const { id, year, sem, div, subject, date } of attendanceIds) {
+        const dateObj = new Date(date);
+        const batchYear = getBatchYear(year);
+        const department = DEPARTMENTS.CSE;
+        const studentYear = year;
+        const collectionPath = buildBatchPath.attendance(batchYear, department, studentYear, sem, div, subject, dateObj);
+        const attendanceRef = doc(collection(db, collectionPath), id);
+        batch.delete(attendanceRef);
+      }
+      
+      await batch.commit();
+      return true;
+    } catch (error) {
+      console.error('Error deleting bulk attendance:', error);
+      return false;
+    }
   },
 
   // Get attendance by user and date range

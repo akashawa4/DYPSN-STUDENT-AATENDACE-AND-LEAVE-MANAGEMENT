@@ -75,6 +75,7 @@ export interface AttendanceLog {
   sem?: string;
   div?: string;
   studentYear?: string; // Student's academic year (2nd, 3rd, 4th) for batch path
+  rollNumber?: string; // Optional roll number for convenience in queries/exports
 }
 
 export interface LeaveBalance {
