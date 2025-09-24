@@ -45,6 +45,8 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   const [batchData, setBatchData] = useState<{ batchName: string; fromRollNo: string; toRollNo: string; totalStudents: number }[]>([]);
   const [selectedBatchForAttendance, setSelectedBatchForAttendance] = useState('');
   const [batchAttendanceLoading, setBatchAttendanceLoading] = useState(false);
+  // Tap-box state for batch-wise attendance (keyed by roll number)
+  const [batchCardAttendance, setBatchCardAttendance] = useState<{[roll: string]: 'present' | 'absent' | 'unmarked'}>({});
 
   const normalizeYear = (y: string) => {
     if (!y) return '';
@@ -209,21 +211,42 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
       if (batch) {
         const fromRoll = parseInt(batch.fromRollNo);
         const toRoll = parseInt(batch.toRollNo);
-        
-        // For batch attendance, we'll mark all students in the batch as present by default
-        // and let the teacher specify absent students in the text input
+        const batchRolls: string[] = [];
         for (let roll = fromRoll; roll <= toRoll; roll++) {
-          presentList.push(roll.toString());
+          batchRolls.push(roll.toString());
         }
-        
-        // Remove any absent students specified in the absent rolls input
-        const absentRollsList = absentRolls
-          .split(/[\s,]+/)
-          .map(r => r.trim())
-          .filter(r => r.length > 0);
-        
-        presentList = presentList.filter(roll => !absentRollsList.includes(roll));
-        absentList = absentRollsList;
+
+        const hasBatchCards = Object.keys(batchCardAttendance).length > 0;
+        if (hasBatchCards) {
+          // Use tap-box selections
+          batchRolls.forEach(roll => {
+            const status = batchCardAttendance[roll] || 'unmarked';
+            if (status === 'present') presentList.push(roll);
+            if (status === 'absent') absentList.push(roll);
+          });
+          // Fill unmarked per mode
+          const presentSetFromCards = new Set(presentList);
+          const absentSetFromCards = new Set(absentList);
+          const unmarked = batchRolls.filter(r => !presentSetFromCards.has(r) && !absentSetFromCards.has(r));
+          if (attendanceMode === 'present') {
+            absentList = [...absentList, ...unmarked];
+          } else if (attendanceMode === 'absent') {
+            presentList = [...presentList, ...unmarked];
+          } else {
+            // both
+            absentList = [...absentList, ...unmarked];
+          }
+        } else {
+          // No tap selections: treat all unmarked. If teacher is in type mode we'll use the textarea; otherwise nothing is auto-marked.
+          if (inputMethod === 'type') {
+            const absentRollsList = absentRolls
+              .split(/[\s,]+/)
+              .map(r => r.trim())
+              .filter(r => r.length > 0);
+            absentList = absentRollsList;
+            presentList = batchRolls.filter(r => !absentRollsList.includes(r));
+          }
+        }
       }
     } else {
       // Use card-based attendance data if available, otherwise fall back to text input
@@ -310,8 +333,23 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
     setSubmitted(true);
 
     // Save attendance to Firestore in parallel
+    // Restrict writes to selected batch when in batch mode
+    const targetStudents = attendanceType === 'batch' && selectedBatchForAttendance
+      ? (() => {
+          const batch = batchData.find(b => b.batchName === selectedBatchForAttendance);
+          if (!batch) return [] as User[];
+          const fromRoll = parseInt(batch.fromRollNo);
+          const toRoll = parseInt(batch.toRollNo);
+          return students.filter(s => {
+            const rollStr = String(s.rollNumber || s.id);
+            const roll = parseInt(rollStr);
+            return !isNaN(roll) && roll >= fromRoll && roll <= toRoll;
+          });
+        })()
+      : students;
+
     await Promise.all(
-      students.map(s => {
+      targetStudents.map(s => {
         const isPresent = finalPresentList.includes(String(s.rollNumber || s.id));
         const isAbsent = finalAbsentList.includes(String(s.rollNumber || s.id));
         
@@ -362,29 +400,53 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
   };
 
   const handleMarkAllPresent = () => {
-    const allRollNumbers = students.map(s => String(s.rollNumber || s.id));
+    const allRollNumbers = attendanceType === 'batch' && selectedBatchForAttendance
+      ? (() => {
+          const b = batchData.find(x => x.batchName === selectedBatchForAttendance);
+          if (!b) return [] as string[];
+          const from = parseInt(b.fromRollNo);
+          const to = parseInt(b.toRollNo);
+          const rolls: string[] = [];
+          for (let r = from; r <= to; r++) rolls.push(r.toString());
+          return rolls;
+        })()
+      : students.map(s => String(s.rollNumber || s.id));
     setPresentRolls(allRollNumbers.join(', '));
     setAbsentRolls('');
     
     // Also update card-based system
     const newAttendance: {[key: string]: 'present' | 'absent' | 'unmarked'} = {};
-    students.forEach(s => {
-      newAttendance[String(s.rollNumber || s.id)] = 'present';
-    });
-    setStudentAttendance(newAttendance);
+    allRollNumbers.forEach(roll => { newAttendance[roll] = 'present'; });
+    if (attendanceType === 'batch') {
+      setBatchCardAttendance(newAttendance);
+    } else {
+      setStudentAttendance(newAttendance);
+    }
   };
 
   const handleMarkAllAbsent = () => {
-    const allRollNumbers = students.map(s => String(s.rollNumber || s.id));
+    const allRollNumbers = attendanceType === 'batch' && selectedBatchForAttendance
+      ? (() => {
+          const b = batchData.find(x => x.batchName === selectedBatchForAttendance);
+          if (!b) return [] as string[];
+          const from = parseInt(b.fromRollNo);
+          const to = parseInt(b.toRollNo);
+          const rolls: string[] = [];
+          for (let r = from; r <= to; r++) rolls.push(r.toString());
+          return rolls;
+        })()
+      : students.map(s => String(s.rollNumber || s.id));
     setAbsentRolls(allRollNumbers.join(', '));
     setPresentRolls('');
     
     // Also update card-based system
     const newAttendance: {[key: string]: 'present' | 'absent' | 'unmarked'} = {};
-    students.forEach(s => {
-      newAttendance[String(s.rollNumber || s.id)] = 'absent';
-    });
-    setStudentAttendance(newAttendance);
+    allRollNumbers.forEach(roll => { newAttendance[roll] = 'absent'; });
+    if (attendanceType === 'batch') {
+      setBatchCardAttendance(newAttendance);
+    } else {
+      setStudentAttendance(newAttendance);
+    }
   };
 
   // Handle individual student card tap
@@ -399,10 +461,17 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
       newStatus = 'unmarked';
     }
     
-    setStudentAttendance(prev => ({
-      ...prev,
-      [studentId]: newStatus
-    }));
+    if (attendanceType === 'batch') {
+      setBatchCardAttendance(prev => ({
+        ...prev,
+        [studentId]: newStatus
+      }));
+    } else {
+      setStudentAttendance(prev => ({
+        ...prev,
+        [studentId]: newStatus
+      }));
+    }
   };
 
 
@@ -438,7 +507,10 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           </button>
           <button
             type="button"
-            onClick={() => setAttendanceType('batch')}
+            onClick={() => {
+              setAttendanceType('batch');
+              setBatchCardAttendance({});
+            }}
             className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               attendanceType === 'batch'
                 ? 'bg-blue-600 text-white'
@@ -603,7 +675,12 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
                 {batchData.map((batch, index) => (
                   <div
                     key={index}
-                    onClick={() => setSelectedBatchForAttendance(batch.batchName)}
+                    onClick={() => {
+                      setSelectedBatchForAttendance(batch.batchName);
+                      setBatchCardAttendance({});
+                      setPresentRolls('');
+                      setAbsentRolls('');
+                    }}
                     className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
                       selectedBatchForAttendance === batch.batchName
                         ? 'bg-blue-100 border-blue-500 text-blue-800'
@@ -648,8 +725,52 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
           </div>
         )}
 
-        {/* Absent Students Input for Batch-wise Attendance */}
-        {attendanceType === 'batch' && selectedBatchForAttendance && (
+        {/* Batch-wise Tap Box Grid */}
+        {attendanceType === 'batch' && selectedBatchForAttendance && inputMethod === 'tap' && (
+          <div className="md:col-span-2">
+            <div className="mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Batch Tap Cards - Tap to toggle Present/Absent
+              </label>
+              <p className="text-xs text-gray-500">Default is Unmarked. Tap to cycle Present → Absent → Unmarked.</p>
+            </div>
+            {(() => {
+              const b = batchData.find(x => x.batchName === selectedBatchForAttendance);
+              if (!b) return null;
+              const from = parseInt(b.fromRollNo);
+              const to = parseInt(b.toRollNo);
+              const rolls: string[] = [];
+              for (let r = from; r <= to; r++) rolls.push(r.toString());
+              return (
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2 border border-gray-200 rounded-lg p-3">
+                  {rolls.map(roll => {
+                    const status = batchCardAttendance[roll] || 'unmarked';
+                    return (
+                      <div
+                        key={roll}
+                        onClick={() => handleStudentCardTap(roll, status)}
+                        className={`p-2 rounded-lg border-2 cursor-pointer transition-all duration-200 text-center select-none ${
+                          status === 'present'
+                            ? 'bg-green-100 border-green-500 text-green-800'
+                            : status === 'absent'
+                            ? 'bg-red-100 border-red-500 text-red-800'
+                            : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+                        }`}
+                        title={`Roll ${roll}`}
+                      >
+                        <div className="text-sm font-semibold">{roll}</div>
+                        <div className="text-[10px] mt-1">{status === 'present' ? 'Present' : status === 'absent' ? 'Absent' : 'Unmarked'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Absent Students Input for Batch-wise Attendance (text mode) */}
+        {attendanceType === 'batch' && selectedBatchForAttendance && inputMethod === 'type' && (
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700">
               Absent Student Roll Numbers (comma or space separated)
@@ -690,7 +811,11 @@ const TakeAttendancePanel: React.FC<TakeAttendancePanelProps> = ({ addNotificati
               onClick={() => {
                 setPresentRolls('');
                 setAbsentRolls('');
-                setStudentAttendance({});
+                if (attendanceType === 'batch') {
+                  setBatchCardAttendance({});
+                } else {
+                  setStudentAttendance({});
+                }
               }}
               className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 text-sm font-medium transition-colors"
             >
